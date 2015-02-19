@@ -1183,6 +1183,10 @@ void
 weston_binding_destroy(struct weston_binding *binding);
 
 void
+weston_install_debug_key_binding(struct weston_compositor *compositor,
+				 uint32_t mod);
+
+void
 weston_binding_list_destroy_all(struct wl_list *list);
 
 void

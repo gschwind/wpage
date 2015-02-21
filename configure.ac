@@ -381,6 +381,8 @@ AM_CONDITIONAL(BUILD_SUBSURFACES_CLIENT,
 
 AM_CONDITIONAL(ENABLE_DESKTOP_SHELL, true)
 
+AM_CONDITIONAL(ENABLE_PAGE_SHELL, true)
+
 AC_ARG_ENABLE(fullscreen-shell,
               AS_HELP_STRING([--disable-fullscreen-shell],
                              [do not build fullscreen-shell server plugin]),,

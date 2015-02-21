@@ -2308,6 +2308,9 @@ surface_commit(struct wl_client *client, struct wl_resource *resource)
 		if (sub->surface != surface)
 			weston_subsurface_parent_commit(sub, 0);
 	}
+
+	printf("commit = %d,%d,%d\n", wl_resource_get_id(surface->resource), surface->width, surface->height);
+
 }
 
 static void

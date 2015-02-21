@@ -45,6 +45,10 @@ extern "C" {
 
 #define ARRAY_LENGTH(a) (sizeof (a) / sizeof (a)[0])
 
+
+/**
+ * find object from a pointer to a member, are you sane ???
+ **/
 #define container_of(ptr, type, member) ({				\
 	const __typeof__( ((type *)0)->member ) *__mptr = (ptr);	\
 	(type *)( (char *)__mptr - offsetof(type,member) );})

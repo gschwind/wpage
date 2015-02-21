@@ -468,8 +468,8 @@ send_configure_for_surface(struct shell_surface *shsurf)
 		width = area.width;
 		height = area.height;
 	} else {
-		width = 0;
-		height = 0;
+		width = 157;
+		height = 277;
 	}
 
 	shsurf->client->send_configure(shsurf->surface, width, height);
@@ -3612,6 +3612,7 @@ shell_get_shell_surface(struct wl_client *client,
 	wl_resource_set_implementation(shsurf->resource,
 				       &shell_surface_implementation,
 				       shsurf, shell_destroy_shell_surface);
+
 }
 
 static bool
@@ -3707,6 +3708,7 @@ xdg_surface_ack_configure(struct wl_client *client,
 			  struct wl_resource *resource,
 			  uint32_t serial)
 {
+	printf("xdg_surface_ack_configure %d\n", serial);
 	struct shell_surface *shsurf = wl_resource_get_user_data(resource);
 
 	if (shsurf->state_requested) {
@@ -3863,6 +3865,7 @@ xdg_send_configure(struct weston_surface *surface,
 	serial = wl_display_next_serial(shsurf->surface->compositor->wl_display);
 	xdg_surface_send_configure(shsurf->resource, width, height, &states, serial);
 
+	printf("xdg_send_configure %d (%d,%d)\n", serial, width, height);
 	wl_array_release(&states);
 }
 
@@ -3899,15 +3902,19 @@ create_xdg_surface(struct shell_client *owner, void *shell,
 	return shsurf;
 }
 
+/**
+ * Implement xdg-shell::get_xdg_surface
+ *
+ */
 static void
 xdg_get_xdg_surface(struct wl_client *client,
 		    struct wl_resource *resource,
 		    uint32_t id,
+			/* created by weston (wl_surface implementation of weston) */
 		    struct wl_resource *surface_resource)
 {
-	struct weston_surface *surface =
-		wl_resource_get_user_data(surface_resource);
-	struct shell_client *sc = wl_resource_get_user_data(resource);
+	auto surface = reinterpret_cast<struct weston_surface *>(wl_resource_get_user_data(surface_resource));
+	auto sc = reinterpret_cast<struct shell_client *>(wl_resource_get_user_data(resource));
 	struct desktop_shell *shell = sc->shell;
 	struct shell_surface *shsurf;
 
@@ -3932,6 +3939,11 @@ xdg_get_xdg_surface(struct wl_client *client,
 	wl_resource_set_implementation(shsurf->resource,
 				       &xdg_surface_implementation,
 				       shsurf, shell_destroy_shell_surface);
+
+	/** force size to 100x100 when xdg_surface is created **/
+	xdg_send_configure(surface, 157, 277);
+	//weston_surface_set_size(surface, 100, 100);
+
 }
 
 static bool
@@ -5337,6 +5349,11 @@ map(struct desktop_shell *shell, struct shell_surface *shsurf,
 		} else if (shsurf->state.maximized) {
 			set_maximized_position(shell, shsurf);
 		} else if (!shsurf->state.relative) {
+
+			weston_matrix_init(&(shsurf->rotation.transform.matrix));
+			weston_matrix_scale(&(shsurf->rotation.transform.matrix),0.5,0.5,0.5);
+			wl_list_insert(&shsurf->view->geometry.transformation_list, &(shsurf->rotation.transform.link));
+
 			weston_view_set_initial_position(shsurf->view, shell);
 		}
 		break;
@@ -5600,6 +5617,10 @@ handle_shell_client_destroy(struct wl_listener *listener, void *data)
 	free(sc);
 }
 
+/**
+ * Create structure to handle a client.
+ * In particular wl_shell or xdg_shell protocol.
+ */
 static struct shell_client *
 shell_client_create(struct wl_client *client, struct desktop_shell *shell,
 		    const struct wl_interface *interface, uint32_t id)
@@ -5627,10 +5648,15 @@ shell_client_create(struct wl_client *client, struct desktop_shell *shell,
 	return sc;
 }
 
+/**
+ * This function is called when a client request to use shell-interface.
+ *
+ * Client do this by bind the corresponding wl_global
+ **/
 static void
-bind_shell(struct wl_client *client, void *data, uint32_t version, uint32_t id)
+bind_shell(wl_client *client, desktop_shell * shell, uint32_t version, uint32_t id)
 {
-	struct desktop_shell *shell = data;
+	//struct desktop_shell *shell = data;
 	struct shell_client *sc;
 
 	sc = shell_client_create(client, shell, &wl_shell_interface, id);
@@ -6590,14 +6616,29 @@ module_init(struct weston_compositor *ec,
 	wl_list_init(&shell->workspaces.animation.link);
 	shell->workspaces.animation.frame = animate_workspace_change_frame;
 
+	/**
+	 * create a global interface of type shell
+	 * wl_shell_interface is the description of shell_interface defined in libwayland.
+	 **/
 	if (wl_global_create(ec->wl_display, &wl_shell_interface, 1,
 				  shell, bind_shell) == NULL)
 		return -1;
 
+	/**
+	 * create a global interface of type xdg-shell
+	 * xdg_shell_interface is the description of xdg-shell-insterface defined in _weston_ only.
+	 **/
 	if (wl_global_create(ec->wl_display, &xdg_shell_interface, 1,
 				  shell, bind_xdg_shell) == NULL)
 		return -1;
 
+	/**
+	 * create a global interface of type desktop_shell_interface
+	 * desktop_shell_interface is an extension provided by _weston_ only and is intend to be used by client
+	 * to dynamically change setting of weston.
+	 *
+	 * xdg_shell_interface is the description of xdg-shell-interface defined in _weston_ only.
+	 **/
 	if (wl_global_create(ec->wl_display,
 			     &desktop_shell_interface, 3,
 			     shell, bind_desktop_shell) == NULL)

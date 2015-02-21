@@ -759,6 +759,9 @@ if ENABLE_PAGE_SHELL
 module_LTLIBRARIES += page-shell.la
 
 page_shell_la_CPPFLAGS =			\
+	-std=c++11				\
+	-fpermissive				\
+	$(COMPOSITOR_CFLAGS)			\
 	-I$(top_builddir)/protocol		\
 	-I$(top_srcdir)/shared			\
 	-I$(top_srcdir)/src			\
@@ -771,12 +774,12 @@ page_shell_la_CPPFLAGS =			\
 
 page_shell_la_LDFLAGS = -module -avoid-version
 page_shell_la_LIBADD = $(COMPOSITOR_LIBS) libshared.la
-page_shell_la_CFLAGS = $(GCC_CFLAGS) $(COMPOSITOR_CFLAGS)
+page_shell_la_CFLAGS = -fpermissive $(GCC_CFLAGS) $(COMPOSITOR_CFLAGS)
 page_shell_la_SOURCES =				\
 	page-shell/shell.h				\
-	page-shell/shell.c				\
-	page-shell/exposay.c				\
-	page-shell/input-panel.c
+	page-shell/shell.cxx				\
+	page-shell/exposay.cxx				\
+	page-shell/input-panel.cxx
 nodist_page_shell_la_SOURCES =			\
 	protocol/desktop-shell-protocol.c		\
 	protocol/desktop-shell-server-protocol.h	\

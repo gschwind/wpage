@@ -120,7 +120,7 @@ struct shell_surface {
 	struct desktop_shell *shell;
 
 	enum shell_surface_type type;
-	char *title, *class;
+	char *title, *class_;
 	int32_t saved_x, saved_y;
 	int32_t saved_width, saved_height;
 	bool saved_position_valid;
@@ -213,6 +213,9 @@ struct rotate_grab {
 };
 
 struct shell_seat {
+
+	enum type : int32_t { POINTER, TOUCH };
+
 	struct weston_seat *seat;
 	struct wl_listener seat_destroy_listener;
 	struct weston_surface *focused_surface;
@@ -227,7 +230,7 @@ struct shell_seat {
 		struct wl_list surfaces_list;
 		struct wl_client *client;
 		int32_t initial_up;
-		enum { POINTER, TOUCH } type;
+		shell_seat::type type;
 	} popup_grab;
 };
 
@@ -443,7 +446,7 @@ static void
 send_configure_for_surface(struct shell_surface *shsurf)
 {
 	int32_t width, height;
-	struct surface_state *state;
+	shell_surface::surface_state *state;
 
 	if (shsurf->state_requested)
 		state = &shsurf->requested_state;
@@ -2235,13 +2238,13 @@ shell_surface_set_title(struct wl_client *client,
 }
 
 static void
-shell_surface_set_class(struct wl_client *client,
-			struct wl_resource *resource, const char *class)
+shell_surface_set_class_(struct wl_client *client,
+			struct wl_resource *resource, const char *class_)
 {
 	struct shell_surface *shsurf = wl_resource_get_user_data(resource);
 
-	free(shsurf->class);
-	shsurf->class = strdup(class);
+	free(shsurf->class_);
+	shsurf->class_ = strdup(class_);
 }
 
 static void
@@ -2941,7 +2944,23 @@ shell_interface_move(struct shell_surface *shsurf, struct weston_seat *ws)
 	return surface_move(shsurf, ws, 1);
 }
 
-static const struct weston_pointer_grab_interface popup_grab_interface;
+static void
+popup_grab_focus(struct weston_pointer_grab *grab);
+static void
+popup_grab_motion(struct weston_pointer_grab *grab, uint32_t time,
+		  wl_fixed_t x, wl_fixed_t y);
+static void
+popup_grab_button(struct weston_pointer_grab *grab,
+		  uint32_t time, uint32_t button, uint32_t state_w);
+static void
+popup_grab_cancel(struct weston_pointer_grab *grab);
+
+static const weston_pointer_grab_interface popup_grab_interface = {
+	popup_grab_focus,
+	popup_grab_motion,
+	popup_grab_button,
+	popup_grab_cancel,
+};
 
 static void
 destroy_shell_seat(struct wl_listener *listener, void *data)
@@ -3119,13 +3138,6 @@ popup_grab_cancel(struct weston_pointer_grab *grab)
 	popup_grab_end(grab->pointer);
 }
 
-static const struct weston_pointer_grab_interface popup_grab_interface = {
-	popup_grab_focus,
-	popup_grab_motion,
-	popup_grab_button,
-	popup_grab_cancel,
-};
-
 static void
 touch_popup_grab_down(struct weston_touch_grab *grab, uint32_t time,
 		      int touch_id, wl_fixed_t sx, wl_fixed_t sy)
@@ -3276,22 +3288,22 @@ add_popup_grab(struct shell_surface *shsurf, struct shell_seat *shseat, int32_t 
 		shseat->popup_grab.type = type;
 		shseat->popup_grab.client = wl_resource_get_client(shsurf->resource);
 
-		if (type == POINTER) {
+		if (type == shell_seat::POINTER) {
 			shseat->popup_grab.grab.interface = &popup_grab_interface;
 			/* We must make sure here that this popup was opened after
 			 * a mouse press, and not just by moving around with other
 			 * popups already open. */
 			if (shseat->seat->pointer->button_count > 0)
 				shseat->popup_grab.initial_up = 0;
-		} else if (type == TOUCH) {
+		} else if (type == shell_seat::TOUCH) {
 			shseat->popup_grab.touch_grab.interface = &touch_popup_grab_interface;
 		}
 
 		wl_list_insert(&shseat->popup_grab.surfaces_list, &shsurf->popup.grab_link);
 
-		if (type == POINTER)
+		if (type == shell_seat::POINTER)
 			weston_pointer_start_grab(seat->pointer, &shseat->popup_grab.grab);
-		else if (type == TOUCH)
+		else if (type == shell_seat::TOUCH)
 			weston_touch_start_grab(seat->touch, &shseat->popup_grab.touch_grab);
 	} else {
 		wl_list_insert(&shseat->popup_grab.surfaces_list, &shsurf->popup.grab_link);
@@ -3306,10 +3318,10 @@ remove_popup_grab(struct shell_surface *shsurf)
 	wl_list_remove(&shsurf->popup.grab_link);
 	wl_list_init(&shsurf->popup.grab_link);
 	if (wl_list_empty(&shseat->popup_grab.surfaces_list)) {
-		if (shseat->popup_grab.type == POINTER) {
+		if (shseat->popup_grab.type == shell_seat::POINTER) {
 			weston_pointer_end_grab(shseat->popup_grab.grab.pointer);
 			shseat->popup_grab.grab.interface = NULL;
-		} else if (shseat->popup_grab.type == TOUCH) {
+		} else if (shseat->popup_grab.type == shell_seat::TOUCH) {
 			weston_touch_end_grab(shseat->popup_grab.touch_grab.touch);
 			shseat->popup_grab.touch_grab.interface = NULL;
 		}
@@ -3331,10 +3343,10 @@ shell_map_popup(struct shell_surface *shsurf)
 
 	if (shseat->seat->pointer &&
 	    shseat->seat->pointer->grab_serial == shsurf->popup.serial) {
-		add_popup_grab(shsurf, shseat, POINTER);
+		add_popup_grab(shsurf, shseat, shell_seat::POINTER);
 	} else if (shseat->seat->touch &&
 	           shseat->seat->touch->grab_serial == shsurf->popup.serial) {
-		add_popup_grab(shsurf, shseat, TOUCH);
+		add_popup_grab(shsurf, shseat, shell_seat::TOUCH);
 	} else {
 		shell_surface_send_popup_done(shsurf);
 		shseat->popup_grab.client = NULL;
@@ -3351,7 +3363,7 @@ static const struct wl_shell_surface_interface shell_surface_implementation = {
 	shell_surface_set_popup,
 	shell_surface_set_maximized,
 	shell_surface_set_title,
-	shell_surface_set_class
+	shell_surface_set_class_
 };
 
 static void
@@ -3651,8 +3663,8 @@ xdg_surface_set_app_id(struct wl_client *client,
 {
 	struct shell_surface *shsurf = wl_resource_get_user_data(resource);
 
-	free(shsurf->class);
-	shsurf->class = strdup(app_id);
+	free(shsurf->class_);
+	shsurf->class_ = strdup(app_id);
 }
 
 static void

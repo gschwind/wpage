@@ -1,7 +1,7 @@
 /*
- * managed_window.hxx
+ * client_managed.hxx
  *
- * copyright (2010-2014) Benoit Gschwind
+ * copyright (2010-2015) Benoit Gschwind
  *
  * This code is licensed under the GPLv3. see COPYING file for more details.
  *

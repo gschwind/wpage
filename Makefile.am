@@ -695,6 +695,38 @@ nodist_desktop_shell_la_SOURCES =			\
 BUILT_SOURCES += $(nodist_desktop_shell_la_SOURCES)
 endif
 
+if ENABLE_PAGE_SHELL
+
+module_LTLIBRARIES += page-shell.la
+
+page_shell_la_CPPFLAGS =			\
+	-I$(top_builddir)/protocol		\
+	-I$(top_srcdir)/shared			\
+	-I$(top_srcdir)/src			\
+	-I$(top_builddir)/src			\
+	-I$(top_builddir)/page-shell		\
+	-DDATADIR='"$(datadir)"'		\
+	-DMODULEDIR='"$(moduledir)"'		\
+	-DLIBEXECDIR='"$(libexecdir)"'		\
+	-DIN_WESTON
+
+page_shell_la_LDFLAGS = -module -avoid-version
+page_shell_la_LIBADD = $(COMPOSITOR_LIBS) libshared.la
+page_shell_la_CFLAGS = $(GCC_CFLAGS) $(COMPOSITOR_CFLAGS)
+page_shell_la_SOURCES =				\
+	page-shell/shell.h				\
+	page-shell/shell.c				\
+	page-shell/exposay.c				\
+	page-shell/input-panel.c
+nodist_page_shell_la_SOURCES =			\
+	protocol/desktop-shell-protocol.c		\
+	protocol/desktop-shell-server-protocol.h	\
+	protocol/xdg-shell-protocol.c			\
+	protocol/xdg-shell-server-protocol.h
+
+BUILT_SOURCES += $(nodist_desktop_shell_la_SOURCES)
+endif
+
 if ENABLE_FULLSCREEN_SHELL
 
 module_LTLIBRARIES += fullscreen-shell.la

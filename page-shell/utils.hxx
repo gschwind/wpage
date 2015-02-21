@@ -25,6 +25,8 @@
 #include <memory>
 #include <sstream>
 
+#include "compositor.h"
+
 #include "box.hxx"
 #include "key_desc.hxx"
 #include "x11_func_name.hxx"
@@ -690,6 +692,18 @@ std::list<T> make_list(std::vector<T> const & v) {
 }
 
 static unsigned int const ALL_DESKTOP = static_cast<unsigned int>(-1);
+
+template<typename T>
+struct cxx_wl_listener {
+	wl_listener listener;
+	T * data;
+
+	cxx_wl_listener(T * data) : data{data} {
+		wl_list_init(&listener.link);
+		listener.notify = nullptr;
+	}
+
+};
 
 }
 

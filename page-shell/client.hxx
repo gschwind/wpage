@@ -11,14 +11,16 @@
 
 #include "compositor.h"
 
+#include "desktop_shell.hxx"
+
 namespace page {
 
 struct shell_client {
-	struct wl_resource *resource;
-	struct wl_client *client;
-	struct desktop_shell *shell;
-	struct wl_listener destroy_listener;
-	struct wl_event_source *ping_timer;
+	wl_resource *resource;
+	wl_client *client;
+	desktop_shell *shell;
+	wl_listener destroy_listener;
+	wl_event_source *ping_timer;
 	uint32_t ping_serial;
 	int unresponsive;
 

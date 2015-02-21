@@ -776,6 +776,7 @@ page_shell_la_LDFLAGS = -module -avoid-version
 page_shell_la_LIBADD = $(COMPOSITOR_LIBS) libshared.la
 page_shell_la_CFLAGS = -fpermissive $(GCC_CFLAGS) $(COMPOSITOR_CFLAGS)
 page_shell_la_SOURCES =				\
+	page-shell/client.cxx				\
 	page-shell/shell.h				\
 	page-shell/shell.cxx				\
 	page-shell/exposay.cxx				\

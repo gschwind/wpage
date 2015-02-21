@@ -63,8 +63,6 @@ enum shell_surface_type {
 	SHELL_SURFACE_XWAYLAND
 };
 
-struct shell_client;
-
 /*
  * Surface stacking and ordering.
  *
@@ -106,7 +104,7 @@ struct shell_client;
 struct shell_surface {
 	struct wl_resource *resource;
 	struct wl_signal destroy_signal;
-	struct shell_client *owner;
+	struct page::shell_client *owner;
 
 	struct weston_surface *surface;
 	struct weston_view *view;
@@ -232,16 +230,6 @@ struct shell_seat {
 		int32_t initial_up;
 		shell_seat::type type;
 	} popup_grab;
-};
-
-struct shell_client {
-	struct wl_resource *resource;
-	struct wl_client *client;
-	struct desktop_shell *shell;
-	struct wl_listener destroy_listener;
-	struct wl_event_source *ping_timer;
-	uint32_t ping_serial;
-	int unresponsive;
 };
 
 static struct desktop_shell *
@@ -2066,7 +2054,7 @@ handle_shell_client_destroy(struct wl_listener *listener, void *data);
 static int
 xdg_ping_timeout_handler(void *data)
 {
-	struct shell_client *sc = data;
+	page::shell_client *sc = reinterpret_cast<page::shell_client*>(data);
 	struct weston_seat *seat;
 	struct shell_surface *shsurf;
 
@@ -2091,7 +2079,7 @@ static void
 handle_xdg_ping(struct shell_surface *shsurf, uint32_t serial)
 {
 	struct weston_compositor *compositor = shsurf->shell->compositor;
-	struct shell_client *sc = shsurf->owner;
+	page::shell_client *sc = reinterpret_cast<page::shell_client*>(shsurf->owner);
 	struct wl_event_loop *loop;
 	static const int ping_timeout = 200;
 
@@ -2185,7 +2173,7 @@ handle_keyboard_focus(struct wl_listener *listener, void *data)
 }
 
 static void
-shell_client_pong(struct shell_client *sc, uint32_t serial)
+shell_client_pong(page::shell_client *sc, uint32_t serial)
 {
 	if (sc->ping_serial != serial)
 		return;
@@ -2205,7 +2193,7 @@ shell_surface_pong(struct wl_client *client,
 		   struct wl_resource *resource, uint32_t serial)
 {
 	struct shell_surface *shsurf = wl_resource_get_user_data(resource);
-	struct shell_client *sc = shsurf->owner;
+	page::shell_client *sc = reinterpret_cast<page::shell_client*>(shsurf->owner);
 
 	shell_client_pong(sc, serial);
 }
@@ -3469,7 +3457,7 @@ get_shell_surface(struct weston_surface *surface)
 }
 
 static struct shell_surface *
-create_common_surface(struct shell_client *owner, void *shell,
+create_common_surface(page::shell_client *owner, void *shell,
 		      struct weston_surface *surface,
 		      const struct weston_shell_client *client)
 {
@@ -3499,7 +3487,7 @@ create_common_surface(struct shell_client *owner, void *shell,
 	shsurf->resource_destroy_listener.notify = handle_resource_destroy;
 	wl_resource_add_destroy_listener(surface->resource,
 					 &shsurf->resource_destroy_listener);
-	shsurf->owner = owner;
+	shsurf->owner = reinterpret_cast<page::shell_client*>(owner);
 
 	shsurf->shell = (struct desktop_shell *) shell;
 	shsurf->unresponsive = 0;
@@ -3587,7 +3575,7 @@ shell_get_shell_surface(struct wl_client *client,
 {
 	struct weston_surface *surface =
 		wl_resource_get_user_data(surface_resource);
-	struct shell_client *sc = wl_resource_get_user_data(resource);
+	page::shell_client *sc = reinterpret_cast<page::shell_client*>(wl_resource_get_user_data(resource));
 	struct desktop_shell *shell = sc->shell;
 	struct shell_surface *shsurf;
 
@@ -3887,7 +3875,7 @@ xdg_use_unstable_version(struct wl_client *client,
 }
 
 static struct shell_surface *
-create_xdg_surface(struct shell_client *owner, void *shell,
+create_xdg_surface(page::shell_client *owner, void *shell,
 		   struct weston_surface *surface,
 		   const struct weston_shell_client *client)
 {
@@ -3914,7 +3902,7 @@ xdg_get_xdg_surface(struct wl_client *client,
 		    struct wl_resource *surface_resource)
 {
 	auto surface = reinterpret_cast<struct weston_surface *>(wl_resource_get_user_data(surface_resource));
-	auto sc = reinterpret_cast<struct shell_client *>(wl_resource_get_user_data(resource));
+	auto sc = reinterpret_cast<page::shell_client *>(wl_resource_get_user_data(resource));
 	struct desktop_shell *shell = sc->shell;
 	struct shell_surface *shsurf;
 
@@ -3979,7 +3967,7 @@ static const struct weston_shell_client xdg_popup_client = {
 };
 
 static struct shell_surface *
-create_xdg_popup(struct shell_client *owner, void *shell,
+create_xdg_popup(page::shell_client *owner, void *shell,
 		 struct weston_surface *surface,
 		 const struct weston_shell_client *client,
 		 struct weston_surface *parent,
@@ -4015,7 +4003,7 @@ xdg_get_xdg_popup(struct wl_client *client,
 {
 	struct weston_surface *surface =
 		wl_resource_get_user_data(surface_resource);
-	struct shell_client *sc = wl_resource_get_user_data(resource);
+	page::shell_client *sc = reinterpret_cast<page::shell_client*>(wl_resource_get_user_data(resource));
 	struct desktop_shell *shell = sc->shell;
 	struct shell_surface *shsurf;
 	struct weston_surface *parent;
@@ -4059,7 +4047,7 @@ static void
 xdg_pong(struct wl_client *client,
 	 struct wl_resource *resource, uint32_t serial)
 {
-	struct shell_client *sc = wl_resource_get_user_data(resource);
+	page::shell_client *sc = reinterpret_cast<page::shell_client*>(wl_resource_get_user_data(resource));
 
 	shell_client_pong(sc, serial);
 }
@@ -5609,8 +5597,8 @@ launch_desktop_shell_process(void *data)
 static void
 handle_shell_client_destroy(struct wl_listener *listener, void *data)
 {
-	struct shell_client *sc =
-		container_of(listener, struct shell_client, destroy_listener);
+	page::shell_client *sc =
+		container_of(listener, page::shell_client, destroy_listener);
 
 	if (sc->ping_timer)
 		wl_event_source_remove(sc->ping_timer);
@@ -5621,13 +5609,13 @@ handle_shell_client_destroy(struct wl_listener *listener, void *data)
  * Create structure to handle a client.
  * In particular wl_shell or xdg_shell protocol.
  */
-static struct shell_client *
+static page::shell_client *
 shell_client_create(struct wl_client *client, struct desktop_shell *shell,
 		    const struct wl_interface *interface, uint32_t id)
 {
-	struct shell_client *sc;
+	page::shell_client *sc;
 
-	sc = zalloc(sizeof *sc);
+	sc = new page::shell_client;
 	if (sc == NULL) {
 		wl_client_post_no_memory(client);
 		return NULL;
@@ -5657,9 +5645,9 @@ static void
 bind_shell(wl_client *client, desktop_shell * shell, uint32_t version, uint32_t id)
 {
 	//struct desktop_shell *shell = data;
-	struct shell_client *sc;
+	//struct shell_client *sc;
 
-	sc = shell_client_create(client, shell, &wl_shell_interface, id);
+	auto sc = shell_client_create(client, shell, &wl_shell_interface, id);
 	if (sc)
 		wl_resource_set_implementation(sc->resource,
 					       &shell_implementation,
@@ -5670,9 +5658,8 @@ static void
 bind_xdg_shell(struct wl_client *client, void *data, uint32_t version, uint32_t id)
 {
 	struct desktop_shell *shell = data;
-	struct shell_client *sc;
 
-	sc = shell_client_create(client, shell, &xdg_shell_interface, id);
+	auto sc = shell_client_create(client, shell, &xdg_shell_interface, id);
 	if (sc)
 		wl_resource_set_dispatcher(sc->resource,
 					   xdg_shell_unversioned_dispatch,

@@ -29,6 +29,8 @@
 
 #include "desktop-shell-server-protocol.h"
 
+#include "client.hxx"
+
 enum animation_type {
 	ANIMATION_NONE,
 

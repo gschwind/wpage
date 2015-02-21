@@ -9,6 +9,9 @@
 #define EXCEPTION_HXX_
 
 #include <cstdarg>
+#include <cstdio>
+
+#include <exception>
 
 namespace page {
 

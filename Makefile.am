@@ -701,6 +701,7 @@ module_LTLIBRARIES += page-shell.la
 
 page_shell_la_CPPFLAGS =			\
 	-std=c++11				\
+	-fPIC					\
 	-fpermissive				\
 	$(COMPOSITOR_CFLAGS)			\
 	-I$(top_builddir)/protocol		\
@@ -713,19 +714,20 @@ page_shell_la_CPPFLAGS =			\
 	-DLIBEXECDIR='"$(libexecdir)"'		\
 	-DIN_WESTON
 
-page_shell_la_LDFLAGS = -module -avoid-version
+page_shell_la_LDFLAGS = -fPIC -module -avoid-version
 page_shell_la_LIBADD = $(COMPOSITOR_LIBS) libshared.la
-page_shell_la_CFLAGS = -fpermissive $(GCC_CFLAGS) $(COMPOSITOR_CFLAGS)
+page_shell_la_CFLAGS = $(GCC_CFLAGS) $(COMPOSITOR_CFLAGS)
 page_shell_la_SOURCES =				\
 	page-shell/client.cxx				\
+	page-shell/surface.cxx				\
 	page-shell/shell.h				\
 	page-shell/shell.cxx				\
 	page-shell/exposay.cxx				\
 	page-shell/input-panel.cxx
 nodist_page_shell_la_SOURCES =			\
-	protocol/desktop-shell-protocol.c		\
+	page-shell/desktop-shell-protocol.cxx		\
 	protocol/desktop-shell-server-protocol.h	\
-	protocol/xdg-shell-protocol.c			\
+	page-shell/xdg-shell-protocol.cxx			\
 	protocol/xdg-shell-server-protocol.h
 
 BUILT_SOURCES += $(nodist_desktop_shell_la_SOURCES)

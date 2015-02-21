@@ -25,7 +25,7 @@ AC_SYS_LARGEFILE
 
 AM_INIT_AUTOMAKE([1.11 parallel-tests foreign no-dist-gzip dist-xz color-tests subdir-objects])
 
-AM_SILENT_RULES([yes])
+AM_SILENT_RULES([no])
 
 # Check for programs
 AC_PROG_CC

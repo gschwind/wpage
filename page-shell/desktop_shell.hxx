@@ -12,6 +12,7 @@
 #include "desktop-shell-server-protocol.h"
 
 #include "exposay.hxx"
+#include "grab_handlers.hxx"
 
 
 enum animation_type {
@@ -125,6 +126,89 @@ struct desktop_shell {
 	char *client;
 
 	struct timespec startup_time;
+
+
+	void get_output_work_area(
+			     struct weston_output *output,
+			     pixman_rectangle32_t *area)
+	{
+		int32_t panel_width = 0, panel_height = 0;
+
+		area->x = 0;
+		area->y = 0;
+
+		this->get_output_panel_size(output, &panel_width, &panel_height);
+
+		switch (this->panel_position) {
+		case DESKTOP_SHELL_PANEL_POSITION_TOP:
+		default:
+			area->y = panel_height;
+		case DESKTOP_SHELL_PANEL_POSITION_BOTTOM:
+			area->width = output->width;
+			area->height = output->height - panel_height;
+			break;
+		case DESKTOP_SHELL_PANEL_POSITION_LEFT:
+			area->x = panel_width;
+		case DESKTOP_SHELL_PANEL_POSITION_RIGHT:
+			area->width = output->width - panel_width;
+			area->height = output->height;
+			break;
+		}
+	}
+
+	void get_output_panel_size(
+			      struct weston_output *output,
+			      int *width,
+			      int *height)
+	{
+		struct weston_view *view;
+
+		*width = 0;
+		*height = 0;
+
+		if (!output)
+			return;
+
+		wl_list_for_each(view, &this->panel_layer.view_list.link, layer_link.link) {
+			float x, y;
+
+			if (view->surface->output != output)
+				continue;
+
+			switch (this->panel_position) {
+			case DESKTOP_SHELL_PANEL_POSITION_TOP:
+			case DESKTOP_SHELL_PANEL_POSITION_BOTTOM:
+
+				weston_view_to_global_float(view,
+							    view->surface->width, 0,
+							    &x, &y);
+
+				*width = (int) x;
+				*height = view->surface->height + (int) y;
+				return;
+
+			case DESKTOP_SHELL_PANEL_POSITION_LEFT:
+			case DESKTOP_SHELL_PANEL_POSITION_RIGHT:
+				weston_view_to_global_float(view,
+							    0, view->surface->height,
+							    &x, &y);
+
+				*width = view->surface->width + (int) x;
+				*height = (int) y;
+				return;
+
+			default:
+				/* we've already set width and height to
+				 * fallback values. */
+				break;
+			}
+		}
+
+		/* the correct view wasn't found */
+	}
+
+
+
 };
 
 

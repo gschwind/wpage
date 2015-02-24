@@ -40,8 +40,10 @@
 #include "../shared/config-parser.h"
 #include "xdg-shell-server-protocol.h"
 
+#include "surface.hxx"
 #include "shell_seat.hxx"
 #include "desktop_shell.hxx"
+
 
 #define DEFAULT_NUM_WORKSPACES 1
 #define DEFAULT_WORKSPACE_CHANGE_ANIMATION_LENGTH 200
@@ -97,40 +99,8 @@ struct focus_state {
  *     (shsurf->parent != NULL) ⇒ !wl_list_is_empty(shsurf->children_link)
  */
 
-
-struct shell_grab {
-	struct weston_pointer_grab grab;
-	page::shell_surface *shsurf;
-	struct wl_listener shsurf_destroy_listener;
-};
-
-struct shell_touch_grab {
-	struct weston_touch_grab grab;
-	page::shell_surface *shsurf;
-	struct wl_listener shsurf_destroy_listener;
-	struct weston_touch *touch;
-};
-
-struct weston_move_grab {
-	struct shell_grab base;
-	wl_fixed_t dx, dy;
-	int client_initiated;
-};
-
-struct weston_touch_move_grab {
-	struct shell_touch_grab base;
-	int active;
-	wl_fixed_t dx, dy;
-};
-
-struct rotate_grab {
-	struct shell_grab base;
-	struct weston_matrix rotation;
-	struct {
-		float x;
-		float y;
-	} center;
-};
+static void
+background_configure(struct weston_surface *es, int32_t sx, int32_t sy);
 
 static desktop_shell *
 shell_surface_get_shell(page::shell_surface *shsurf);
@@ -144,10 +114,6 @@ shell_fade_startup(struct desktop_shell *shell);
 static page::shell_seat *
 get_shell_seat(weston_seat *seat);
 
-static void
-get_output_panel_size(struct desktop_shell *shell,
-		      struct weston_output *output,
-		      int *width, int *height);
 
 static void
 shell_surface_update_child_surface_layers(page::shell_surface *shsurf);
@@ -155,6 +121,9 @@ shell_surface_update_child_surface_layers(page::shell_surface *shsurf);
 
 static bool
 shell_surface_is_xdg_popup(page::shell_surface *shsurf);
+
+static void
+panel_configure(struct weston_surface *es, int32_t sx, int32_t sy);
 
 static void
 destroy_shell_grab_shsurf(struct wl_listener *listener, void *data)
@@ -187,216 +156,8 @@ get_default_view(weston_surface *surface)
 	return container_of(surface->views.next, weston_view, surface_link);
 }
 
-static void
-popup_grab_end(struct weston_pointer *pointer);
-static void
-touch_popup_grab_end(struct weston_touch *touch);
 
-static void
-shell_grab_start(struct shell_grab *grab,
-		 const struct weston_pointer_grab_interface *interface,
-		 page::shell_surface *shsurf,
-		 struct weston_pointer *pointer,
-		 enum desktop_shell_cursor cursor)
-{
-	desktop_shell *shell = shsurf->shell;
 
-	popup_grab_end(pointer);
-	if (pointer->seat->touch)
-		touch_popup_grab_end(pointer->seat->touch);
-
-	grab->grab.interface = interface;
-	grab->shsurf = shsurf;
-	grab->shsurf_destroy_listener.notify = destroy_shell_grab_shsurf;
-	wl_signal_add(&shsurf->destroy_signal,
-		      &grab->shsurf_destroy_listener);
-
-	shsurf->grabbed = 1;
-	weston_pointer_start_grab(pointer, &grab->grab);
-	if (shell->child.desktop_shell) {
-		desktop_shell_send_grab_cursor(shell->child.desktop_shell,
-					       cursor);
-		weston_pointer_set_focus(pointer,
-					 get_default_view(shell->grab_surface),
-					 wl_fixed_from_int(0),
-					 wl_fixed_from_int(0));
-	}
-}
-
-static void
-get_output_panel_size(struct desktop_shell *shell,
-		      struct weston_output *output,
-		      int *width,
-		      int *height)
-{
-	struct weston_view *view;
-
-	*width = 0;
-	*height = 0;
-
-	if (!output)
-		return;
-
-	wl_list_for_each(view, &shell->panel_layer.view_list.link, layer_link.link) {
-		float x, y;
-
-		if (view->surface->output != output)
-			continue;
-
-		switch (shell->panel_position) {
-		case DESKTOP_SHELL_PANEL_POSITION_TOP:
-		case DESKTOP_SHELL_PANEL_POSITION_BOTTOM:
-
-			weston_view_to_global_float(view,
-						    view->surface->width, 0,
-						    &x, &y);
-
-			*width = (int) x;
-			*height = view->surface->height + (int) y;
-			return;
-
-		case DESKTOP_SHELL_PANEL_POSITION_LEFT:
-		case DESKTOP_SHELL_PANEL_POSITION_RIGHT:
-			weston_view_to_global_float(view,
-						    0, view->surface->height,
-						    &x, &y);
-
-			*width = view->surface->width + (int) x;
-			*height = (int) y;
-			return;
-
-		default:
-			/* we've already set width and height to
-			 * fallback values. */
-			break;
-		}
-	}
-
-	/* the correct view wasn't found */
-}
-
-static void
-get_output_work_area(struct desktop_shell *shell,
-		     struct weston_output *output,
-		     pixman_rectangle32_t *area)
-{
-	int32_t panel_width = 0, panel_height = 0;
-
-	area->x = 0;
-	area->y = 0;
-
-	get_output_panel_size(shell, output, &panel_width, &panel_height);
-
-	switch (shell->panel_position) {
-	case DESKTOP_SHELL_PANEL_POSITION_TOP:
-	default:
-		area->y = panel_height;
-	case DESKTOP_SHELL_PANEL_POSITION_BOTTOM:
-		area->width = output->width;
-		area->height = output->height - panel_height;
-		break;
-	case DESKTOP_SHELL_PANEL_POSITION_LEFT:
-		area->x = panel_width;
-	case DESKTOP_SHELL_PANEL_POSITION_RIGHT:
-		area->width = output->width - panel_width;
-		area->height = output->height;
-		break;
-	}
-}
-
-static void
-send_configure_for_surface(page::shell_surface *shsurf)
-{
-	int32_t width, height;
-	page::shell_surface::surface_state *state;
-
-	if (shsurf->state_requested)
-		state = &shsurf->requested_state;
-	else if (shsurf->state_changed)
-		state = &shsurf->next_state;
-	else
-		state = &shsurf->state;
-
-	if (state->fullscreen) {
-		width = shsurf->output->width;
-		height = shsurf->output->height;
-	} else if (state->maximized) {
-		struct desktop_shell *shell;
-		pixman_rectangle32_t area;
-
-		shell = shell_surface_get_shell(shsurf);
-		get_output_work_area(shell, shsurf->output, &area);
-
-		width = area.width;
-		height = area.height;
-	} else {
-		width = 157;
-		height = 277;
-	}
-
-	shsurf->client->send_configure(shsurf->surface, width, height);
-}
-
-static void
-shell_surface_state_changed(page::shell_surface *shsurf)
-{
-	if (shell_surface_is_xdg_surface(shsurf))
-		send_configure_for_surface(shsurf);
-}
-
-static void
-shell_grab_end(struct shell_grab *grab)
-{
-	if (grab->shsurf) {
-		wl_list_remove(&grab->shsurf_destroy_listener.link);
-		grab->shsurf->grabbed = 0;
-
-		if (grab->shsurf->resize_edges) {
-			grab->shsurf->resize_edges = 0;
-			shell_surface_state_changed(grab->shsurf);
-		}
-	}
-
-	weston_pointer_end_grab(grab->grab.pointer);
-}
-
-static void
-shell_touch_grab_start(struct shell_touch_grab *grab,
-		       const struct weston_touch_grab_interface *interface,
-		       page::shell_surface *shsurf,
-		       struct weston_touch *touch)
-{
-	desktop_shell *shell = shsurf->shell;
-
-	touch_popup_grab_end(touch);
-	if (touch->seat->pointer)
-		popup_grab_end(touch->seat->pointer);
-
-	grab->grab.interface = interface;
-	grab->shsurf = shsurf;
-	grab->shsurf_destroy_listener.notify = destroy_shell_grab_shsurf;
-	wl_signal_add(&shsurf->destroy_signal,
-		      &grab->shsurf_destroy_listener);
-
-	grab->touch = touch;
-	shsurf->grabbed = 1;
-
-	weston_touch_start_grab(touch, &grab->grab);
-	if (shell->child.desktop_shell)
-		weston_touch_set_focus(touch->seat,
-				       get_default_view(shell->grab_surface));
-}
-
-static void
-shell_touch_grab_end(struct shell_touch_grab *grab)
-{
-	if (grab->shsurf) {
-		wl_list_remove(&grab->shsurf_destroy_listener.link);
-		grab->shsurf->grabbed = 0;
-	}
-
-	weston_touch_end_grab(grab->touch);
-}
 
 static void
 center_on_output(struct weston_view *view,
@@ -1387,103 +1148,6 @@ bind_workspace_manager(struct wl_client *client,
 				     shell->workspaces.num);
 }
 
-static void
-touch_move_grab_down(struct weston_touch_grab *grab, uint32_t time,
-		     int touch_id, wl_fixed_t sx, wl_fixed_t sy)
-{
-}
-
-static void
-touch_move_grab_up(struct weston_touch_grab *grab, uint32_t time, int touch_id)
-{
-	struct weston_touch_move_grab *move =
-		(struct weston_touch_move_grab *) container_of(
-			grab, struct shell_touch_grab, grab);
-
-	if (touch_id == 0)
-		move->active = 0;
-
-	if (grab->touch->num_tp == 0) {
-		shell_touch_grab_end(&move->base);
-		free(move);
-	}
-}
-
-static void
-touch_move_grab_motion(struct weston_touch_grab *grab, uint32_t time,
-		       int touch_id, wl_fixed_t sx, wl_fixed_t sy)
-{
-	struct weston_touch_move_grab *move = (struct weston_touch_move_grab *) grab;
-	page::shell_surface *shsurf = move->base.shsurf;
-	struct weston_surface *es;
-	int dx = wl_fixed_to_int(grab->touch->grab_x + move->dx);
-	int dy = wl_fixed_to_int(grab->touch->grab_y + move->dy);
-
-	if (!shsurf || !move->active)
-		return;
-
-	es = shsurf->surface;
-
-	weston_view_set_position(shsurf->view, dx, dy);
-
-	weston_compositor_schedule_repaint(es->compositor);
-}
-
-static void
-touch_move_grab_frame(struct weston_touch_grab *grab)
-{
-}
-
-static void
-touch_move_grab_cancel(struct weston_touch_grab *grab)
-{
-	struct weston_touch_move_grab *move =
-		(struct weston_touch_move_grab *) container_of(
-			grab, struct shell_touch_grab, grab);
-
-	shell_touch_grab_end(&move->base);
-	free(move);
-}
-
-static const struct weston_touch_grab_interface touch_move_grab_interface = {
-	touch_move_grab_down,
-	touch_move_grab_up,
-	touch_move_grab_motion,
-	touch_move_grab_frame,
-	touch_move_grab_cancel,
-};
-
-static int
-surface_touch_move(page::shell_surface *shsurf, struct weston_seat *seat)
-{
-	struct weston_touch_move_grab *move;
-
-	if (!shsurf)
-		return -1;
-
-	if (shsurf->state.fullscreen || shsurf->state.maximized)
-		return 0;
-
-	move = malloc(sizeof *move);
-	if (!move)
-		return -1;
-
-	move->active = 1;
-	move->dx = wl_fixed_from_double(shsurf->view->geometry.x) -
-			seat->touch->grab_x;
-	move->dy = wl_fixed_from_double(shsurf->view->geometry.y) -
-			seat->touch->grab_y;
-
-	shell_touch_grab_start(&move->base, &touch_move_grab_interface, shsurf,
-			       seat->touch);
-
-	return 0;
-}
-
-static void
-noop_grab_focus(struct weston_pointer_grab *grab)
-{
-}
 
 static void
 constrain_position(struct weston_move_grab *move, int *cx, int *cy)
@@ -1497,7 +1161,7 @@ constrain_position(struct weston_move_grab *move, int *cx, int *cy)
 	y = wl_fixed_to_int(pointer->y + move->dy);
 
 	if (shsurf->shell->panel_position == DESKTOP_SHELL_PANEL_POSITION_TOP) {
-		get_output_panel_size(shsurf->shell, shsurf->surface->output,
+		shsurf->shell->get_output_panel_size(shsurf->surface->output,
 				      &panel_width, &panel_height);
 
 		bottom = y + shsurf->geometry.height;
@@ -1513,214 +1177,6 @@ constrain_position(struct weston_move_grab *move, int *cx, int *cy)
 	*cx = x;
 	*cy = y;
 }
-
-static void
-move_grab_motion(struct weston_pointer_grab *grab, uint32_t time,
-		 wl_fixed_t x, wl_fixed_t y)
-{
-	struct weston_move_grab *move = (struct weston_move_grab *) grab;
-	struct weston_pointer *pointer = grab->pointer;
-	page::shell_surface *shsurf = move->base.shsurf;
-	int cx, cy;
-
-	weston_pointer_move(pointer, x, y);
-	if (!shsurf)
-		return;
-
-	constrain_position(move, &cx, &cy);
-
-	weston_view_set_position(shsurf->view, cx, cy);
-
-	weston_compositor_schedule_repaint(shsurf->surface->compositor);
-}
-
-static void
-move_grab_button(struct weston_pointer_grab *grab,
-		 uint32_t time, uint32_t button, uint32_t state_w)
-{
-	struct shell_grab *shell_grab = container_of(grab, struct shell_grab,
-						    grab);
-	struct weston_pointer *pointer = grab->pointer;
-	enum wl_pointer_button_state state = state_w;
-
-	if (pointer->button_count == 0 &&
-	    state == WL_POINTER_BUTTON_STATE_RELEASED) {
-		shell_grab_end(shell_grab);
-		free(grab);
-	}
-}
-
-static void
-move_grab_cancel(struct weston_pointer_grab *grab)
-{
-	struct shell_grab *shell_grab =
-		container_of(grab, struct shell_grab, grab);
-
-	shell_grab_end(shell_grab);
-	free(grab);
-}
-
-static const struct weston_pointer_grab_interface move_grab_interface = {
-	noop_grab_focus,
-	move_grab_motion,
-	move_grab_button,
-	move_grab_cancel,
-};
-
-static int
-surface_move(page::shell_surface *shsurf, struct weston_seat *seat,
-	     int client_initiated)
-{
-	struct weston_move_grab *move;
-
-	if (!shsurf)
-		return -1;
-
-	if (shsurf->grabbed ||
-	    shsurf->state.fullscreen || shsurf->state.maximized)
-		return 0;
-
-	move = malloc(sizeof *move);
-	if (!move)
-		return -1;
-
-	move->dx = wl_fixed_from_double(shsurf->view->geometry.x) -
-			seat->pointer->grab_x;
-	move->dy = wl_fixed_from_double(shsurf->view->geometry.y) -
-			seat->pointer->grab_y;
-	move->client_initiated = client_initiated;
-
-	shell_grab_start(&move->base, &move_grab_interface, shsurf,
-			 seat->pointer, DESKTOP_SHELL_CURSOR_MOVE);
-
-	return 0;
-}
-
-static void
-common_surface_move(struct wl_resource *resource,
-		    struct wl_resource *seat_resource, uint32_t serial)
-{
-	struct weston_seat *seat = wl_resource_get_user_data(seat_resource);
-	page::shell_surface *shsurf = wl_resource_get_user_data(resource);
-	struct weston_surface *surface;
-
-	if (seat->pointer &&
-	    seat->pointer->focus &&
-	    seat->pointer->button_count > 0 &&
-	    seat->pointer->grab_serial == serial) {
-		surface = weston_surface_get_main_surface(seat->pointer->focus->surface);
-		if ((surface == shsurf->surface) &&
-		    (surface_move(shsurf, seat, 1) < 0))
-			wl_resource_post_no_memory(resource);
-	} else if (seat->touch &&
-		   seat->touch->focus &&
-		   seat->touch->grab_serial == serial) {
-		surface = weston_surface_get_main_surface(seat->touch->focus->surface);
-		if ((surface == shsurf->surface) &&
-		    (surface_touch_move(shsurf, seat) < 0))
-			wl_resource_post_no_memory(resource);
-	}
-}
-
-static void
-shell_surface_move(struct wl_client *client, struct wl_resource *resource,
-		   struct wl_resource *seat_resource, uint32_t serial)
-{
-	common_surface_move(resource, seat_resource, serial);
-}
-
-struct weston_resize_grab {
-	struct shell_grab base;
-	uint32_t edges;
-	int32_t width, height;
-};
-
-static void
-resize_grab_motion(struct weston_pointer_grab *grab, uint32_t time,
-		   wl_fixed_t x, wl_fixed_t y)
-{
-	struct weston_resize_grab *resize = (struct weston_resize_grab *) grab;
-	struct weston_pointer *pointer = grab->pointer;
-	page::shell_surface *shsurf = resize->base.shsurf;
-	int32_t width, height;
-	wl_fixed_t from_x, from_y;
-	wl_fixed_t to_x, to_y;
-
-	weston_pointer_move(pointer, x, y);
-
-	if (!shsurf)
-		return;
-
-	weston_view_from_global_fixed(shsurf->view,
-				      pointer->grab_x, pointer->grab_y,
-				      &from_x, &from_y);
-	weston_view_from_global_fixed(shsurf->view,
-				      pointer->x, pointer->y, &to_x, &to_y);
-
-	width = resize->width;
-	if (resize->edges & WL_SHELL_SURFACE_RESIZE_LEFT) {
-		width += wl_fixed_to_int(from_x - to_x);
-	} else if (resize->edges & WL_SHELL_SURFACE_RESIZE_RIGHT) {
-		width += wl_fixed_to_int(to_x - from_x);
-	}
-
-	height = resize->height;
-	if (resize->edges & WL_SHELL_SURFACE_RESIZE_TOP) {
-		height += wl_fixed_to_int(from_y - to_y);
-	} else if (resize->edges & WL_SHELL_SURFACE_RESIZE_BOTTOM) {
-		height += wl_fixed_to_int(to_y - from_y);
-	}
-
-	shsurf->client->send_configure(shsurf->surface, width, height);
-}
-
-static void
-send_configure(struct weston_surface *surface, int32_t width, int32_t height)
-{
-	page::shell_surface *shsurf = page::shell_surface::get_shell_surface(surface);
-
-	assert(shsurf);
-
-	if (shsurf->resource)
-		wl_shell_surface_send_configure(shsurf->resource,
-						shsurf->resize_edges,
-						width, height);
-}
-
-static const struct weston_shell_client shell_client = {
-	send_configure
-};
-
-static void
-resize_grab_button(struct weston_pointer_grab *grab,
-		   uint32_t time, uint32_t button, uint32_t state_w)
-{
-	struct weston_resize_grab *resize = (struct weston_resize_grab *) grab;
-	struct weston_pointer *pointer = grab->pointer;
-	enum wl_pointer_button_state state = state_w;
-
-	if (pointer->button_count == 0 &&
-	    state == WL_POINTER_BUTTON_STATE_RELEASED) {
-		shell_grab_end(&resize->base);
-		free(grab);
-	}
-}
-
-static void
-resize_grab_cancel(struct weston_pointer_grab *grab)
-{
-	struct weston_resize_grab *resize = (struct weston_resize_grab *) grab;
-
-	shell_grab_end(&resize->base);
-	free(grab);
-}
-
-static const struct weston_pointer_grab_interface resize_grab_interface = {
-	noop_grab_focus,
-	resize_grab_motion,
-	resize_grab_button,
-	resize_grab_cancel,
-};
 
 /*
  * Returns the bounding box of a surface and all its sub-surfaces,
@@ -1788,7 +1244,7 @@ surface_resize(page::shell_surface *shsurf,
 	resize->height = shsurf->geometry.height;
 
 	shsurf->resize_edges = edges;
-	shell_surface_state_changed(shsurf);
+	shsurf->shell_surface_state_changed();
 	shell_grab_start(&resize->base, &resize_grab_interface, shsurf,
 			 seat->pointer, edges);
 
@@ -1826,63 +1282,7 @@ shell_surface_resize(struct wl_client *client, struct wl_resource *resource,
 	common_surface_resize(resource, seat_resource, serial, edges);
 }
 
-static void
-busy_cursor_grab_focus(struct weston_pointer_grab *base)
-{
-	struct shell_grab *grab = (struct shell_grab *) base;
-	struct weston_pointer *pointer = base->pointer;
-	struct weston_view *view;
-	wl_fixed_t sx, sy;
 
-	view = weston_compositor_pick_view(pointer->seat->compositor,
-					   pointer->x, pointer->y,
-					   &sx, &sy);
-
-	if (!grab->shsurf || grab->shsurf->surface != view->surface) {
-		shell_grab_end(grab);
-		free(grab);
-	}
-}
-
-static void
-busy_cursor_grab_motion(struct weston_pointer_grab *grab, uint32_t time,
-			wl_fixed_t x, wl_fixed_t y)
-{
-	weston_pointer_move(grab->pointer, x, y);
-}
-
-static void
-busy_cursor_grab_button(struct weston_pointer_grab *base,
-			uint32_t time, uint32_t button, uint32_t state)
-{
-	struct shell_grab *grab = (struct shell_grab *) base;
-	page::shell_surface *shsurf = grab->shsurf;
-	struct weston_seat *seat = grab->grab.pointer->seat;
-
-	if (shsurf && button == BTN_LEFT && state) {
-		activate(shsurf->shell, shsurf->surface, seat, true);
-		surface_move(shsurf, seat, 0);
-	} else if (shsurf && button == BTN_RIGHT && state) {
-		activate(shsurf->shell, shsurf->surface, seat, true);
-		surface_rotate(shsurf, seat);
-	}
-}
-
-static void
-busy_cursor_grab_cancel(struct weston_pointer_grab *base)
-{
-	struct shell_grab *grab = (struct shell_grab *) base;
-
-	shell_grab_end(grab);
-	free(grab);
-}
-
-static const struct weston_pointer_grab_interface busy_cursor_grab_interface = {
-	busy_cursor_grab_focus,
-	busy_cursor_grab_motion,
-	busy_cursor_grab_button,
-	busy_cursor_grab_cancel,
-};
 
 static void
 set_busy_cursor(page::shell_surface *shsurf, struct weston_pointer *pointer)
@@ -1902,28 +1302,6 @@ set_busy_cursor(page::shell_surface *shsurf, struct weston_pointer *pointer)
 	 * to move it. */
 	shsurf->grabbed = 0;
 }
-
-static void
-end_busy_cursor(struct weston_compositor *compositor, struct wl_client *client)
-{
-	struct shell_grab *grab;
-	struct weston_seat *seat;
-
-	wl_list_for_each(seat, &compositor->seat_list, link) {
-		if (seat->pointer == NULL)
-			continue;
-
-		grab = (struct shell_grab *) seat->pointer->grab;
-		if (grab->grab.interface == &busy_cursor_grab_interface &&
-		    wl_resource_get_client(grab->shsurf->resource) == client) {
-			shell_grab_end(grab);
-			free(grab);
-		}
-	}
-}
-
-static void
-handle_shell_client_destroy(struct wl_listener *listener, void *data);
 
 static int
 xdg_ping_timeout_handler(void *data)
@@ -1973,10 +1351,10 @@ handle_xdg_ping(page::shell_surface *shsurf, uint32_t serial)
 
 	wl_event_source_timer_update(sc->ping_timer, ping_timeout);
 
-	if (shell_surface_is_xdg_surface(shsurf) ||
+	if (shsurf->shell_surface_is_xdg_surface() ||
 	    shell_surface_is_xdg_popup(shsurf))
 		xdg_shell_send_ping(sc->resource, serial);
-	else if (shell_surface_is_wl_shell_surface(shsurf))
+	else if (shsurf->shell_surface_is_wl_shell_surface())
 		wl_shell_surface_send_ping(shsurf->resource, serial);
 }
 
@@ -2015,14 +1393,14 @@ static void
 shell_surface_lose_keyboard_focus(page::shell_surface *shsurf)
 {
 	if (--shsurf->focus_count == 0)
-		shell_surface_state_changed(shsurf);
+		shsurf->shell_surface_state_changed();
 }
 
 static void
 shell_surface_gain_keyboard_focus(page::shell_surface *shsurf)
 {
 	if (shsurf->focus_count++ == 0)
-		shell_surface_state_changed(shsurf);
+		shsurf->shell_surface_state_changed();
 }
 
 static void
@@ -2044,32 +1422,6 @@ handle_keyboard_focus(struct wl_listener *listener, void *data)
 		if (shsurf)
 			shell_surface_gain_keyboard_focus(shsurf);
 	}
-}
-
-static void
-shell_client_pong(page::shell_client *sc, uint32_t serial)
-{
-	if (sc->ping_serial != serial)
-		return;
-
-	sc->unresponsive = 0;
-	end_busy_cursor(sc->shell->compositor, sc->client);
-
-	if (sc->ping_timer) {
-		wl_event_source_remove(sc->ping_timer);
-		sc->ping_timer = NULL;
-	}
-
-}
-
-static void
-shell_surface_pong(struct wl_client *client,
-		   struct wl_resource *resource, uint32_t serial)
-{
-	page::shell_surface *shsurf = wl_resource_get_user_data(resource);
-	page::shell_client *sc = reinterpret_cast<page::shell_client*>(shsurf->owner);
-
-	shell_client_pong(sc, serial);
 }
 
 static void
@@ -2224,7 +1576,7 @@ set_fullscreen(page::shell_surface *shsurf,
 	shsurf->fullscreen.type = method;
 	shsurf->fullscreen.framerate = framerate;
 
-	send_configure_for_surface(shsurf);
+	shsurf->send_configure_for_surface();
 }
 
 static void
@@ -2359,7 +1711,7 @@ shell_surface_set_maximized(struct wl_client *client,
 
 	shell_surface_set_output(shsurf, output);
 
-	send_configure_for_surface(shsurf);
+	shsurf->send_configure_for_surface();
 }
 
 
@@ -2556,26 +1908,8 @@ shell_interface_set_fullscreen(page::shell_surface *shsurf,
 static int
 shell_interface_move(page::shell_surface *shsurf, struct weston_seat *ws)
 {
-	return surface_move(shsurf, ws, 1);
+	return shsurf->surface_move(ws, 1);
 }
-
-static void
-popup_grab_focus(struct weston_pointer_grab *grab);
-static void
-popup_grab_motion(struct weston_pointer_grab *grab, uint32_t time,
-		  wl_fixed_t x, wl_fixed_t y);
-static void
-popup_grab_button(struct weston_pointer_grab *grab,
-		  uint32_t time, uint32_t button, uint32_t state_w);
-static void
-popup_grab_cancel(struct weston_pointer_grab *grab);
-
-static const weston_pointer_grab_interface popup_grab_interface = {
-	popup_grab_focus,
-	popup_grab_motion,
-	popup_grab_button,
-	popup_grab_cancel,
-};
 
 static void
 destroy_shell_seat(struct wl_listener *listener, void *data)
@@ -2831,7 +2165,7 @@ static const struct weston_touch_grab_interface touch_popup_grab_interface = {
 static void
 shell_surface_send_popup_done(page::shell_surface *shsurf)
 {
-	if (shell_surface_is_wl_shell_surface(shsurf))
+	if (shsurf->shell_surface_is_wl_shell_surface())
 		wl_shell_surface_send_popup_done(shsurf->resource);
 	else if (shell_surface_is_xdg_popup(shsurf))
 		xdg_popup_send_popup_done(shsurf->resource,
@@ -2968,28 +2302,8 @@ shell_map_popup(page::shell_surface *shsurf)
 	}
 }
 
-static const struct wl_shell_surface_interface shell_surface_implementation = {
-	shell_surface_pong,
-	shell_surface_move,
-	shell_surface_resize,
-	shell_surface_set_toplevel,
-	shell_surface_set_transient,
-	shell_surface_set_fullscreen,
-	shell_surface_set_popup,
-	shell_surface_set_maximized,
-	shell_surface_set_title,
-	shell_surface_set_class_
-};
 
-static void
-shell_destroy_shell_surface(struct wl_resource *resource)
-{
-	page::shell_surface *shsurf = wl_resource_get_user_data(resource);
 
-	if (!wl_list_empty(&shsurf->popup.grab_link))
-		remove_popup_grab(shsurf);
-	shsurf->resource = NULL;
-}
 
 void
 fade_out_done(struct weston_view_animation *animation, void *data)
@@ -3007,31 +2321,10 @@ shell_surface_configure(struct weston_surface *, int32_t, int32_t);
 
 
 static page::shell_surface *
-create_common_surface(page::shell_client *owner, void *shell,
-		      struct weston_surface *surface,
-		      const struct weston_shell_client *client)
-{
-	page::shell_surface *shsurf;
-
-	if (surface->configure) {
-		weston_log("surface->configure already set\n");
-		return NULL;
-	}
-
-	shsurf = new page::shell_surface{owner, shell, surface, client};
-	if (!shsurf) {
-		weston_log("no memory to allocate shell surface\n");
-		return NULL;
-	}
-
-	return shsurf;
-}
-
-static page::shell_surface *
 create_shell_surface(void *shell, struct weston_surface *surface,
 		     const struct weston_shell_client *client)
 {
-	return create_common_surface(NULL, shell, surface, client);
+	return new page::shell_surface(nullptr, shell, surface, client);
 }
 
 static struct weston_view *
@@ -3065,46 +2358,6 @@ get_focused_output(struct weston_compositor *compositor)
 
 	return output;
 }
-
-static void
-shell_get_shell_surface(struct wl_client *client,
-			struct wl_resource *resource,
-			uint32_t id,
-			struct wl_resource *surface_resource)
-{
-	struct weston_surface *surface =
-		wl_resource_get_user_data(surface_resource);
-	page::shell_client *sc = reinterpret_cast<page::shell_client*>(wl_resource_get_user_data(resource));
-	struct desktop_shell *shell = sc->shell;
-	page::shell_surface *shsurf;
-
-	if (page::shell_surface::get_shell_surface(surface)) {
-		wl_resource_post_error(surface_resource,
-				       WL_DISPLAY_ERROR_INVALID_OBJECT,
-				       "desktop_shell::get_shell_surface already requested");
-		return;
-	}
-
-	shsurf = create_common_surface(sc, shell, surface, &shell_client);
-	if (!shsurf) {
-		wl_resource_post_error(surface_resource,
-				       WL_DISPLAY_ERROR_INVALID_OBJECT,
-				       "surface->configure already set");
-		return;
-	}
-
-	shsurf->resource =
-		wl_resource_create(client,
-				   &wl_shell_surface_interface, 1, id);
-	wl_resource_set_implementation(shsurf->resource,
-				       &shell_surface_implementation,
-				       shsurf, shell_destroy_shell_surface);
-
-}
-
-static const struct wl_shell_interface shell_implementation = {
-	shell_get_shell_surface
-};
 
 /****************************
  * xdg-shell implementation */
@@ -3167,7 +2420,7 @@ static void
 xdg_surface_move(struct wl_client *client, struct wl_resource *resource,
 		 struct wl_resource *seat_resource, uint32_t serial)
 {
-	common_surface_move(resource, seat_resource, serial);
+	page::shell_surface::common_surface_move(resource, seat_resource, serial);
 }
 
 static void
@@ -3222,7 +2475,7 @@ xdg_surface_set_maximized(struct wl_client *client,
 		output = shsurf->surface->output;
 
 	shell_surface_set_output(shsurf, output);
- 	send_configure_for_surface(shsurf);
+	shsurf->send_configure_for_surface();
 }
 
 static void
@@ -3233,7 +2486,7 @@ xdg_surface_unset_maximized(struct wl_client *client,
 
 	shsurf->state_requested = true;
 	shsurf->requested_state.maximized = false;
-	send_configure_for_surface(shsurf);
+	shsurf->send_configure_for_surface();
 }
 
 static void
@@ -3262,7 +2515,7 @@ xdg_surface_set_fullscreen(struct wl_client *client,
 	shell_surface_set_output(shsurf, output);
 	shsurf->fullscreen_output = shsurf->output;
 
-	send_configure_for_surface(shsurf);
+	shsurf->send_configure_for_surface();
 }
 
 static void
@@ -3273,7 +2526,7 @@ xdg_surface_unset_fullscreen(struct wl_client *client,
 
 	shsurf->state_requested = true;
 	shsurf->requested_state.fullscreen = false;
-	send_configure_for_surface(shsurf);
+	shsurf->send_configure_for_surface();
 }
 
 static void
@@ -3433,7 +2686,7 @@ create_xdg_surface(page::shell_client *owner, void *shell,
 {
 	page::shell_surface *shsurf;
 
-	shsurf = create_common_surface(owner, shell, surface, client);
+	shsurf = new page::shell_surface(owner, shell, surface, client);
 	if (!shsurf)
 		return NULL;
 
@@ -3478,7 +2731,7 @@ xdg_get_xdg_surface(struct wl_client *client,
 				   &xdg_surface_interface, 1, id);
 	wl_resource_set_implementation(shsurf->resource,
 				       &xdg_surface_implementation,
-				       shsurf, shell_destroy_shell_surface);
+				       shsurf, page::shell_surface::shell_destroy_shell_surface);
 
 	/** force size to 100x100 when xdg_surface is created **/
 	xdg_send_configure(surface, 157, 277);
@@ -3529,7 +2782,7 @@ create_xdg_popup(page::shell_client *owner, void *shell,
 {
 	page::shell_surface *shsurf;
 
-	shsurf = create_common_surface(owner, shell, surface, client);
+	shsurf = new page::shell_surface(owner, shell, surface, client);
 	if (!shsurf)
 		return NULL;
 
@@ -3592,7 +2845,7 @@ xdg_get_xdg_popup(struct wl_client *client,
 				   &xdg_popup_interface, 1, id);
 	wl_resource_set_implementation(shsurf->resource,
 				       &xdg_popup_implementation,
-				       shsurf, shell_destroy_shell_surface);
+				       shsurf, page::shell_surface::shell_destroy_shell_surface);
 }
 
 static void
@@ -3601,7 +2854,7 @@ xdg_pong(struct wl_client *client,
 {
 	page::shell_client *sc = reinterpret_cast<page::shell_client*>(wl_resource_get_user_data(resource));
 
-	shell_client_pong(sc, serial);
+	sc->shell_client_pong(serial);
 }
 
 static bool
@@ -3943,7 +3196,7 @@ move_binding(struct weston_seat *seat, uint32_t time, uint32_t button, void *dat
 	    shsurf->state.maximized)
 		return;
 
-	surface_move(shsurf, (struct weston_seat *) seat, 0);
+	shsurf->surface_move((struct weston_seat *) seat, 0);
 }
 
 static void
@@ -3966,7 +3219,7 @@ maximize_binding(struct weston_seat *seat, uint32_t time, uint32_t button, void 
 
 	shsurf->state_requested = true;
 	shsurf->requested_state.maximized = !shsurf->state.maximized;
-	send_configure_for_surface(shsurf);
+	shsurf->send_configure_for_surface();
 }
 
 static void
@@ -3990,7 +3243,7 @@ fullscreen_binding(struct weston_seat *seat, uint32_t time, uint32_t button, voi
 	shsurf->state_requested = true;
 	shsurf->requested_state.fullscreen = !shsurf->state.fullscreen;
 	shsurf->fullscreen_output = shsurf->output;
-	send_configure_for_surface(shsurf);
+	shsurf->send_configure_for_surface();
 }
 
 static void
@@ -4013,7 +3266,7 @@ touch_move_binding(struct weston_seat *seat, uint32_t time, void *data)
 	    shsurf->state.maximized)
 		return;
 
-	surface_touch_move(shsurf, (struct weston_seat *) seat);
+	shsurf->surface_touch_move((struct weston_seat *) seat);
 }
 
 static void
@@ -4153,145 +3406,6 @@ terminate_binding(struct weston_seat *seat, uint32_t time, uint32_t key,
 	struct weston_compositor *compositor = data;
 
 	wl_display_terminate(compositor->wl_display);
-}
-
-static void
-rotate_grab_motion(struct weston_pointer_grab *grab, uint32_t time,
-		   wl_fixed_t x, wl_fixed_t y)
-{
-	struct rotate_grab *rotate =
-		container_of(grab, struct rotate_grab, base.grab);
-	struct weston_pointer *pointer = grab->pointer;
-	page::shell_surface *shsurf = rotate->base.shsurf;
-	float cx, cy, dx, dy, cposx, cposy, dposx, dposy, r;
-
-	weston_pointer_move(pointer, x, y);
-
-	if (!shsurf)
-		return;
-
-	cx = 0.5f * shsurf->surface->width;
-	cy = 0.5f * shsurf->surface->height;
-
-	dx = wl_fixed_to_double(pointer->x) - rotate->center.x;
-	dy = wl_fixed_to_double(pointer->y) - rotate->center.y;
-	r = sqrtf(dx * dx + dy * dy);
-
-	wl_list_remove(&shsurf->rotation.transform.link);
-	weston_view_geometry_dirty(shsurf->view);
-
-	if (r > 20.0f) {
-		struct weston_matrix *matrix =
-			&shsurf->rotation.transform.matrix;
-
-		weston_matrix_init(&rotate->rotation);
-		weston_matrix_rotate_xy(&rotate->rotation, dx / r, dy / r);
-
-		weston_matrix_init(matrix);
-		weston_matrix_translate(matrix, -cx, -cy, 0.0f);
-		weston_matrix_multiply(matrix, &shsurf->rotation.rotation);
-		weston_matrix_multiply(matrix, &rotate->rotation);
-		weston_matrix_translate(matrix, cx, cy, 0.0f);
-
-		wl_list_insert(
-			&shsurf->view->geometry.transformation_list,
-			&shsurf->rotation.transform.link);
-	} else {
-		wl_list_init(&shsurf->rotation.transform.link);
-		weston_matrix_init(&shsurf->rotation.rotation);
-		weston_matrix_init(&rotate->rotation);
-	}
-
-	/* We need to adjust the position of the surface
-	 * in case it was resized in a rotated state before */
-	cposx = shsurf->view->geometry.x + cx;
-	cposy = shsurf->view->geometry.y + cy;
-	dposx = rotate->center.x - cposx;
-	dposy = rotate->center.y - cposy;
-	if (dposx != 0.0f || dposy != 0.0f) {
-		weston_view_set_position(shsurf->view,
-					 shsurf->view->geometry.x + dposx,
-					 shsurf->view->geometry.y + dposy);
-	}
-
-	/* Repaint implies weston_view_update_transform(), which
-	 * lazily applies the damage due to rotation update.
-	 */
-	weston_compositor_schedule_repaint(shsurf->surface->compositor);
-}
-
-static void
-rotate_grab_button(struct weston_pointer_grab *grab,
-		   uint32_t time, uint32_t button, uint32_t state_w)
-{
-	struct rotate_grab *rotate =
-		container_of(grab, struct rotate_grab, base.grab);
-	struct weston_pointer *pointer = grab->pointer;
-	page::shell_surface *shsurf = rotate->base.shsurf;
-	enum wl_pointer_button_state state = state_w;
-
-	if (pointer->button_count == 0 &&
-	    state == WL_POINTER_BUTTON_STATE_RELEASED) {
-		if (shsurf)
-			weston_matrix_multiply(&shsurf->rotation.rotation,
-					       &rotate->rotation);
-		shell_grab_end(&rotate->base);
-		free(rotate);
-	}
-}
-
-static void
-rotate_grab_cancel(struct weston_pointer_grab *grab)
-{
-	struct rotate_grab *rotate =
-		container_of(grab, struct rotate_grab, base.grab);
-
-	shell_grab_end(&rotate->base);
-	free(rotate);
-}
-
-static const struct weston_pointer_grab_interface rotate_grab_interface = {
-	noop_grab_focus,
-	rotate_grab_motion,
-	rotate_grab_button,
-	rotate_grab_cancel,
-};
-
-static void
-surface_rotate(page::shell_surface *surface, struct weston_seat *seat)
-{
-	struct rotate_grab *rotate;
-	float dx, dy;
-	float r;
-
-	rotate = malloc(sizeof *rotate);
-	if (!rotate)
-		return;
-
-	weston_view_to_global_float(surface->view,
-				    surface->surface->width * 0.5f,
-				    surface->surface->height * 0.5f,
-				    &rotate->center.x, &rotate->center.y);
-
-	dx = wl_fixed_to_double(seat->pointer->x) - rotate->center.x;
-	dy = wl_fixed_to_double(seat->pointer->y) - rotate->center.y;
-	r = sqrtf(dx * dx + dy * dy);
-	if (r > 20.0f) {
-		struct weston_matrix inverse;
-
-		weston_matrix_init(&inverse);
-		weston_matrix_rotate_xy(&inverse, dx / r, -dy / r);
-		weston_matrix_multiply(&surface->rotation.rotation, &inverse);
-
-		weston_matrix_init(&rotate->rotation);
-		weston_matrix_rotate_xy(&rotate->rotation, dx / r, dy / r);
-	} else {
-		weston_matrix_init(&surface->rotation.rotation);
-		weston_matrix_init(&rotate->rotation);
-	}
-
-	shell_grab_start(&rotate->base, &rotate_grab_interface, surface,
-			 seat->pointer, DESKTOP_SHELL_CURSOR_ARROW);
 }
 
 static void
@@ -4774,7 +3888,7 @@ weston_view_set_initial_position(struct weston_view *view,
 	 * If this is negative it means that the surface is bigger than
 	 * output.
 	 */
-	get_output_work_area(shell, target_output, &area);
+	shell->get_output_work_area(target_output, &area);
 
 	dx = area.x;
 	dy = area.y;
@@ -4801,7 +3915,7 @@ set_maximized_position(struct desktop_shell *shell,
 	pixman_rectangle32_t area;
 	pixman_box32_t *e;
 
-	get_output_work_area(shell, shsurf->output, &area);
+	shell->get_output_work_area(shsurf->output, &area);
 	surface_subsurfaces_boundingbox(shsurf->surface,
 					&surf_x, &surf_y, NULL, NULL);
 	e = pixman_region32_extents(&shsurf->output->region);
@@ -5021,48 +4135,6 @@ launch_desktop_shell_process(void *data)
 				       &shell->child.client_destroy_listener);
 }
 
-static void
-handle_shell_client_destroy(struct wl_listener *listener, void *data)
-{
-	page::shell_client *sc =
-		container_of(listener, page::shell_client, destroy_listener);
-
-	if (sc->ping_timer)
-		wl_event_source_remove(sc->ping_timer);
-	free(sc);
-}
-
-/**
- * Create structure to handle a client.
- * In particular wl_shell or xdg_shell protocol.
- */
-static page::shell_client *
-shell_client_create(struct wl_client *client, struct desktop_shell *shell,
-		    const struct wl_interface *interface, uint32_t id)
-{
-	page::shell_client *sc;
-
-	sc = new page::shell_client;
-	if (sc == NULL) {
-		wl_client_post_no_memory(client);
-		return NULL;
-	}
-
-	sc->resource = wl_resource_create(client, interface, 1, id);
-	if (sc->resource == NULL) {
-		free(sc);
-		wl_client_post_no_memory(client);
-		return NULL;
-	}
-
-	sc->client = client;
-	sc->shell = shell;
-	sc->destroy_listener.notify = handle_shell_client_destroy;
-	wl_client_add_destroy_listener(client, &sc->destroy_listener);
-
-	return sc;
-}
-
 /**
  * This function is called when a client request to use shell-interface.
  *
@@ -5071,14 +4143,11 @@ shell_client_create(struct wl_client *client, struct desktop_shell *shell,
 static void
 bind_shell(wl_client *client, desktop_shell * shell, uint32_t version, uint32_t id)
 {
-	//struct desktop_shell *shell = data;
-	//struct shell_client *sc;
-
-	auto sc = shell_client_create(client, shell, &wl_shell_interface, id);
-	if (sc)
-		wl_resource_set_implementation(sc->resource,
-					       &shell_implementation,
-					       sc, NULL);
+	/**
+	 * reate a new object, this object will be handled by wl_resource
+	 * And it will be destroyed on destroy of this resources
+	 **/
+	new page::shell_client{client, shell, page::shell_client::API_SHELL, id};
 }
 
 static void
@@ -5086,7 +4155,7 @@ bind_xdg_shell(struct wl_client *client, void *data, uint32_t version, uint32_t 
 {
 	struct desktop_shell *shell = data;
 
-	auto sc = shell_client_create(client, shell, &xdg_shell_interface, id);
+	auto sc = new page::shell_client(client, shell, page::shell_client::API_XDG, id);
 	if (sc)
 		wl_resource_set_dispatcher(sc->resource,
 					   xdg_shell_unversioned_dispatch,

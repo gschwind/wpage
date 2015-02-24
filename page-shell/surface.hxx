@@ -17,6 +17,8 @@
 
 namespace page {
 
+struct shell_client;
+
 enum shell_surface_type {
 	SHELL_SURFACE_NONE,
 	SHELL_SURFACE_TOPLEVEL,
@@ -24,7 +26,13 @@ enum shell_surface_type {
 	SHELL_SURFACE_XWAYLAND
 };
 
+/**
+ * This shell surface is used for both shell_surface and xdg_surface
+ * the diference is in resources interfaces.
+ **/
 struct shell_surface {
+	static const struct wl_shell_surface_interface shell_surface_implementation;
+
 	wl_resource *resource;
 	wl_signal destroy_signal;
 	shell_client *owner;
@@ -43,7 +51,10 @@ struct shell_surface {
 	enum shell_surface_type type;
 	char *title, *class_;
 	int32_t saved_x, saved_y;
-	int32_t saved_width, saved_height;bool saved_position_valid;bool saved_size_valid;bool saved_rotation_valid;
+	int32_t saved_width, saved_height;
+	bool saved_position_valid;
+	bool saved_size_valid;
+	bool saved_rotation_valid;
 	int unresponsive, grabbed;
 	uint32_t resize_edges;
 
@@ -64,11 +75,21 @@ struct shell_surface {
 		uint32_t flags;
 	} transient;
 
-	struct {
-		enum wl_shell_surface_fullscreen_method type;
-		struct weston_transform transform; /* matrix from x, y */
+	struct _fullscree_t {
+		wl_shell_surface_fullscreen_method type;
+		weston_transform transform; /* matrix from x, y */
 		uint32_t framerate;
-		struct weston_view *black_view;
+		weston_view *black_view;
+
+		_fullscree_t() :
+			type{WL_SHELL_SURFACE_FULLSCREEN_METHOD_DEFAULT},
+			framerate{0},
+			black_view{nullptr}
+		{
+			wl_list_init(&transform.link);
+			weston_matrix_init(&transform.matrix);
+		}
+
 	} fullscreen;
 
 	weston_transform workspace_transform;
@@ -108,12 +129,39 @@ struct shell_surface {
 	auto shell_surface_is_wl_shell_surface() -> bool;
 	auto shell_surface_is_xdg_surface() -> bool;
 
-
+	auto surface_move(weston_seat *seat, int client_initiated) -> int;
+	auto surface_rotate(struct weston_seat *seat) -> void;
+	auto surface_touch_move(weston_seat *seat) -> int;
 
 	static auto get_shell_surface(struct weston_surface *surface) -> shell_surface *;
 	static auto shell_surface_configure(struct weston_surface *es, int32_t sx, int32_t sy) -> void;
-	static auto handle_resource_destroy(cxx_wl_listener<shell_surface> * listener, void *data) -> void;
-	static auto shell_handle_surface_destroy(cxx_wl_listener<shell_surface> * listener, void *data) -> void;
+	static void shell_destroy_shell_surface(wl_resource *resource);
+
+	void handle_resource_destroy();
+	void shell_handle_surface_destroy();
+
+	void send_configure_for_surface();
+	void shell_surface_state_changed();
+
+
+	/**
+	 * Implementation of server side shell_surface API
+	 **/
+
+	static auto shell_surface_pong(wl_client *client, wl_resource *resource, uint32_t serial) -> void;
+	static auto shell_surface_move(wl_client *client, wl_resource *resource, wl_resource *seat_resource, uint32_t serial) -> void;
+	static auto shell_surface_resize(wl_client *client, wl_resource *resource, wl_resource *seat_resource, uint32_t serial, uint32_t edges) -> void;
+	static auto shell_surface_set_toplevel(wl_client *client, wl_resource *resource) -> void;
+	static auto	shell_surface_set_transient(wl_client *client, wl_resource *resource, wl_resource *parent_resource, int x, int y, uint32_t flags) -> void;
+	static auto shell_surface_set_fullscreen(wl_client *client, wl_resource *resource, uint32_t method, uint32_t framerate, wl_resource *output_resource) -> void;
+	static auto shell_surface_set_popup(wl_client *client, wl_resource *resource, wl_resource *seat_resource, uint32_t serial, struct wl_resource *parent_resource, int32_t x, int32_t y, uint32_t flags) -> void;
+	static auto shell_surface_set_maximized(wl_client *client, wl_resource *resource, wl_resource *output_resource) -> void;
+	static auto shell_surface_set_title(wl_client *client, wl_resource *resource, const char *title) -> void;
+	static auto shell_surface_set_class(wl_client *client, wl_resource *resource, const char *class_name) -> void;
+
+	/* commun implementation */
+	static void common_surface_move(wl_resource *resource, wl_resource *seat_resource, uint32_t serial);
+
 
 };
 

@@ -106,18 +106,10 @@ static desktop_shell *
 shell_surface_get_shell(page::shell_surface *shsurf);
 
 static void
-surface_rotate(page::shell_surface *surface, struct weston_seat *seat);
-
-static void
 shell_fade_startup(struct desktop_shell *shell);
 
 static page::shell_seat *
 get_shell_seat(weston_seat *seat);
-
-
-static void
-shell_surface_update_child_surface_layers(page::shell_surface *shsurf);
-
 
 static bool
 shell_surface_is_xdg_popup(page::shell_surface *shsurf);
@@ -1052,7 +1044,7 @@ take_surface_to_workspace_by_seat(struct desktop_shell *shell,
 
 	shsurf = page::shell_surface::get_shell_surface(surface);
 	if (shsurf != NULL)
-		shell_surface_update_child_surface_layers(shsurf);
+		shsurf->shell_surface_update_child_surface_layers();
 
 	replace_focus_state(shell, to, seat);
 	drop_focus_state(shell, from, surface);
@@ -1684,7 +1676,7 @@ set_minimized(struct weston_surface *surface, uint32_t is_true)
 		}
 	}
 
-	shell_surface_update_child_surface_layers(shsurf);
+	shsurf->shell_surface_update_child_surface_layers();
 
 	weston_view_damage_below(view);
 }
@@ -3430,7 +3422,7 @@ rotate_binding(struct weston_seat *seat, uint32_t time, uint32_t button,
 	    surface->state.maximized)
 		return;
 
-	surface_rotate(surface, seat);
+	surface->surface_rotate(seat);
 }
 
 /* Move all fullscreen layers down to the current workspace and hide their

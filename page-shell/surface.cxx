@@ -824,3 +824,11 @@ void shell_surface::set_fullscreen(
 
 	this->send_configure_for_surface();
 }
+
+bool shell_surface::shell_surface_is_xdg_popup()
+{
+	return wl_resource_instance_of(this->resource,
+				       &xdg_popup_interface,
+				       &xdg_popup_implementation);
+}
+

@@ -760,7 +760,6 @@ module_LTLIBRARIES += page-shell.la
 
 page_shell_la_CPPFLAGS =			\
 	-std=c++11				\
-	-fPIC					\
 	-fpermissive				\
 	$(COMPOSITOR_CFLAGS)			\
 	-I$(top_builddir)/protocol		\
@@ -773,7 +772,7 @@ page_shell_la_CPPFLAGS =			\
 	-DLIBEXECDIR='"$(libexecdir)"'		\
 	-DIN_WESTON
 
-page_shell_la_LDFLAGS = -fPIC -module -avoid-version
+page_shell_la_LDFLAGS = -module -avoid-version
 page_shell_la_LIBADD = $(COMPOSITOR_LIBS) libshared.la
 page_shell_la_CFLAGS = $(GCC_CFLAGS) $(COMPOSITOR_CFLAGS)
 page_shell_la_SOURCES =					\

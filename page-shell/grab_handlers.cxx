@@ -38,7 +38,7 @@ void destroy_shell_grab_shsurf(struct wl_listener *listener, void *data);
 
 weston_view * get_default_view(weston_surface *surface);
 void activate(struct desktop_shell *shell, struct weston_surface *es, struct weston_seat *seat, bool configure);
-void constrain_position(struct weston_move_grab *move, int *cx, int *cy);
+static void constrain_position(struct weston_move_grab *move, int *cx, int *cy);
 
 static void busy_cursor_grab_button(struct weston_pointer_grab *base, uint32_t time, uint32_t button, uint32_t state);
 static void busy_cursor_grab_cancel(struct weston_pointer_grab *base);
@@ -616,6 +616,35 @@ static void
 popup_grab_cancel(struct weston_pointer_grab *grab)
 {
 	popup_grab_end(grab->pointer);
+}
+
+static void
+constrain_position(struct weston_move_grab *move, int *cx, int *cy)
+{
+	shell_surface *shsurf = move->base.shsurf;
+	struct weston_pointer *pointer = move->base.grab.pointer;
+	int x, y, panel_width, panel_height, bottom;
+	const int safety = 50;
+
+	x = wl_fixed_to_int(pointer->x + move->dx);
+	y = wl_fixed_to_int(pointer->y + move->dy);
+
+	if (shsurf->shell->panel_position == DESKTOP_SHELL_PANEL_POSITION_TOP) {
+		shsurf->shell->get_output_panel_size(shsurf->surface->output,
+				      &panel_width, &panel_height);
+
+		bottom = y + shsurf->geometry.height;
+		if (bottom - panel_height < safety)
+			y = panel_height + safety -
+				shsurf->geometry.height;
+
+		if (move->client_initiated &&
+		    y + shsurf->geometry.y < panel_height)
+			y = panel_height - shsurf->geometry.y;
+	}
+
+	*cx = x;
+	*cy = y;
 }
 
 

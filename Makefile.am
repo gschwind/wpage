@@ -730,9 +730,9 @@ page_shell_la_SOURCES =					\
 	page-shell/exposay.cxx				\
 	page-shell/input-panel.cxx
 nodist_page_shell_la_SOURCES =				\
-	page-shell/desktop-shell-protocol.cxx		\
+	protocol/desktop-shell-protocol.c		\
 	protocol/desktop-shell-server-protocol.h	\
-	page-shell/xdg-shell-protocol.cxx		\
+	protocol/xdg-shell-protocol.c			\
 	protocol/xdg-shell-server-protocol.h
 
 BUILT_SOURCES += $(nodist_desktop_shell_la_SOURCES)

@@ -976,34 +976,6 @@ bind_workspace_manager(struct wl_client *client,
 }
 
 
-static void
-constrain_position(struct weston_move_grab *move, int *cx, int *cy)
-{
-	shell_surface *shsurf = move->base.shsurf;
-	struct weston_pointer *pointer = move->base.grab.pointer;
-	int x, y, panel_width, panel_height, bottom;
-	const int safety = 50;
-
-	x = wl_fixed_to_int(pointer->x + move->dx);
-	y = wl_fixed_to_int(pointer->y + move->dy);
-
-	if (shsurf->shell->panel_position == DESKTOP_SHELL_PANEL_POSITION_TOP) {
-		shsurf->shell->get_output_panel_size(shsurf->surface->output,
-				      &panel_width, &panel_height);
-
-		bottom = y + shsurf->geometry.height;
-		if (bottom - panel_height < safety)
-			y = panel_height + safety -
-				shsurf->geometry.height;
-
-		if (move->client_initiated &&
-		    y + shsurf->geometry.y < panel_height)
-			y = panel_height - shsurf->geometry.y;
-	}
-
-	*cx = x;
-	*cy = y;
-}
 
 /*
  * Returns the bounding box of a surface and all its sub-surfaces,

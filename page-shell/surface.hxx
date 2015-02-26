@@ -172,7 +172,7 @@ struct shell_surface {
 	void shell_surface_set_output(struct weston_output *output);
 	void set_popup(struct weston_surface *parent, struct weston_seat *seat, uint32_t serial, int32_t x, int32_t y);
 	void set_fullscreen(uint32_t method, uint32_t framerate, struct weston_output *output);
-
+	bool shell_surface_is_xdg_popup();
 
 };
 

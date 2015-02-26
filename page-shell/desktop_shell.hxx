@@ -149,6 +149,9 @@ struct desktop_shell {
 
 	void restore_focus_state(struct workspace *ws);
 
+	void shell_fade_startup();
+	static void do_shell_fade_startup(void *data);
+
 };
 
 

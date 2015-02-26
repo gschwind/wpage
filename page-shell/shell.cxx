@@ -97,15 +97,6 @@
 static void
 background_configure(struct weston_surface *es, int32_t sx, int32_t sy);
 
-static desktop_shell *
-shell_surface_get_shell(shell_surface *shsurf);
-
-static void
-shell_fade_startup(struct desktop_shell *shell);
-
-static bool
-shell_surface_is_xdg_popup(shell_surface *shsurf);
-
 static void
 panel_configure(struct weston_surface *es, int32_t sx, int32_t sy);
 
@@ -1123,7 +1114,7 @@ handle_xdg_ping(shell_surface *shsurf, uint32_t serial)
 	wl_event_source_timer_update(sc->ping_timer, ping_timeout);
 
 	if (shsurf->shell_surface_is_xdg_surface() ||
-	    shell_surface_is_xdg_popup(shsurf))
+			shsurf->shell_surface_is_xdg_popup())
 		xdg_shell_send_ping(sc->resource, serial);
 	else if (shsurf->shell_surface_is_wl_shell_surface())
 		wl_shell_surface_send_ping(shsurf->resource, serial);
@@ -1559,7 +1550,7 @@ shell_surface_send_popup_done(shell_surface *shsurf)
 {
 	if (shsurf->shell_surface_is_wl_shell_surface())
 		wl_shell_surface_send_popup_done(shsurf->resource);
-	else if (shell_surface_is_xdg_popup(shsurf))
+	else if (shsurf->shell_surface_is_xdg_popup())
 		xdg_popup_send_popup_done(shsurf->resource,
 					  shsurf->popup.serial);
 }
@@ -1717,308 +1708,6 @@ shell_surface_configure(struct weston_surface *, int32_t, int32_t);
 /****************************
  * xdg-shell implementation */
 
-
-
-
-void
-desktop_shell_set_background(struct wl_client *client,
-			     struct wl_resource *resource,
-			     struct wl_resource *output_resource,
-			     struct wl_resource *surface_resource)
-{
-	struct desktop_shell *shell = wl_resource_get_user_data(resource);
-	struct weston_surface *surface =
-		wl_resource_get_user_data(surface_resource);
-	struct weston_view *view, *next;
-
-	if (surface->configure) {
-		wl_resource_post_error(surface_resource,
-				       WL_DISPLAY_ERROR_INVALID_OBJECT,
-				       "surface role already assigned");
-		return;
-	}
-
-	wl_list_for_each_safe(view, next, &surface->views, surface_link)
-		weston_view_destroy(view);
-	view = weston_view_create(surface);
-
-	surface->configure = background_configure;
-	surface->configure_private = shell;
-	surface->output = wl_resource_get_user_data(output_resource);
-	view->output = surface->output;
-	desktop_shell_send_configure(resource, 0,
-				     surface_resource,
-				     surface->output->width,
-				     surface->output->height);
-}
-
-void
-desktop_shell_set_panel(struct wl_client *client,
-			struct wl_resource *resource,
-			struct wl_resource *output_resource,
-			struct wl_resource *surface_resource)
-{
-	struct desktop_shell *shell = wl_resource_get_user_data(resource);
-	struct weston_surface *surface =
-		wl_resource_get_user_data(surface_resource);
-	struct weston_view *view, *next;
-
-	if (surface->configure) {
-		wl_resource_post_error(surface_resource,
-				       WL_DISPLAY_ERROR_INVALID_OBJECT,
-				       "surface role already assigned");
-		return;
-	}
-
-	wl_list_for_each_safe(view, next, &surface->views, surface_link)
-		weston_view_destroy(view);
-	view = weston_view_create(surface);
-
-	surface->configure = panel_configure;
-	surface->configure_private = shell;
-	surface->output = wl_resource_get_user_data(output_resource);
-	view->output = surface->output;
-	desktop_shell_send_configure(resource, 0,
-				     surface_resource,
-				     surface->output->width,
-				     surface->output->height);
-}
-
-
-
-
-
-static bool
-shell_surface_is_xdg_surface(shell_surface *shsurf)
-{
-	return shsurf->resource &&
-		wl_resource_instance_of(shsurf->resource,
-					&xdg_surface_interface,
-					&page::xdg_surface_implementation);
-}
-
-/* xdg-popup implementation */
-
-static bool
-shell_surface_is_xdg_popup(shell_surface *shsurf)
-{
-	return wl_resource_instance_of(shsurf->resource,
-				       &xdg_popup_interface,
-				       &xdg_popup_implementation);
-}
-
-static int
-xdg_shell_unversioned_dispatch(const void *implementation,
-			       void *_target, uint32_t opcode,
-			       const struct wl_message *message,
-			       union wl_argument *args)
-{
-	struct wl_resource *resource = _target;
-	struct shell_client *sc = wl_resource_get_user_data(resource);
-
-	if (opcode != 0) {
-		wl_resource_post_error(resource,
-				       WL_DISPLAY_ERROR_INVALID_OBJECT,
-				       "must call use_unstable_version first");
-		return 0;
-	}
-
-#define XDG_SERVER_VERSION 4
-
-	static_assert(XDG_SERVER_VERSION == XDG_SHELL_VERSION_CURRENT,
-		      "shell implementation doesn't match protocol version");
-
-	if (args[0].i != XDG_SERVER_VERSION) {
-		wl_resource_post_error(resource,
-				       WL_DISPLAY_ERROR_INVALID_OBJECT,
-				       "incompatible version, server is %d "
-				       "client wants %d",
-				       XDG_SERVER_VERSION, args[0].i);
-		return 0;
-	}
-
-	wl_resource_set_implementation(resource, &xdg_implementation,
-				       sc, NULL);
-
-	return 1;
-}
-
-/* end of xdg-shell implementation */
-/***********************************/
-
-static int
-screensaver_timeout(void *data)
-{
-	struct desktop_shell *shell = data;
-
-	shell->shell_fade(FADE_OUT);
-
-	return 1;
-}
-
-
-static void
-configure_static_view(struct weston_view *ev, struct weston_layer *layer)
-{
-	struct weston_view *v, *next;
-
-	wl_list_for_each_safe(v, next, &layer->view_list.link, layer_link.link) {
-		if (v->output == ev->output && v != ev) {
-			weston_view_unmap(v);
-			v->surface->configure = NULL;
-		}
-	}
-
-	weston_view_set_position(ev, ev->output->x, ev->output->y);
-
-	if (wl_list_empty(&ev->layer_link.link)) {
-		weston_layer_entry_insert(&layer->view_list, &ev->layer_link);
-		weston_compositor_schedule_repaint(ev->surface->compositor);
-	}
-}
-
-static void
-background_configure(struct weston_surface *es, int32_t sx, int32_t sy)
-{
-	struct desktop_shell *shell = es->configure_private;
-	struct weston_view *view;
-
-	view = container_of(es->views.next, struct weston_view, surface_link);
-
-	configure_static_view(view, &shell->background_layer);
-}
-
-static void
-panel_configure(struct weston_surface *es, int32_t sx, int32_t sy)
-{
-	struct desktop_shell *shell = es->configure_private;
-	struct weston_view *view;
-
-	view = container_of(es->views.next, struct weston_view, surface_link);
-
-	configure_static_view(view, &shell->panel_layer);
-}
-
-
-
-static void
-lock_surface_configure(struct weston_surface *surface, int32_t sx, int32_t sy)
-{
-	struct desktop_shell *shell = surface->configure_private;
-	struct weston_view *view;
-
-	view = container_of(surface->views.next, struct weston_view, surface_link);
-
-	if (surface->width == 0)
-		return;
-
-	center_on_output(view, get_default_output(shell->compositor));
-
-	if (!weston_surface_is_mapped(surface)) {
-		weston_layer_entry_insert(&shell->lock_layer.view_list,
-					  &view->layer_link);
-		weston_view_update_transform(view);
-		shell->shell_fade(FADE_IN);
-	}
-}
-
-static void
-handle_lock_surface_destroy(struct wl_listener *listener, void *data)
-{
-	struct desktop_shell *shell =
-	    container_of(listener, struct desktop_shell, lock_surface_listener);
-
-	weston_log("lock surface gone\n");
-	shell->lock_surface = NULL;
-}
-
-static void
-desktop_shell_set_lock_surface(struct wl_client *client,
-			       struct wl_resource *resource,
-			       struct wl_resource *surface_resource)
-{
-	struct desktop_shell *shell = wl_resource_get_user_data(resource);
-	struct weston_surface *surface =
-		wl_resource_get_user_data(surface_resource);
-
-	shell->prepare_event_sent = false;
-
-	if (!shell->locked)
-		return;
-
-	shell->lock_surface = surface;
-
-	shell->lock_surface_listener.notify = handle_lock_surface_destroy;
-	wl_signal_add(&surface->destroy_signal,
-		      &shell->lock_surface_listener);
-
-	weston_view_create(surface);
-	surface->configure = lock_surface_configure;
-	surface->configure_private = shell;
-}
-
-static void
-desktop_shell_unlock(struct wl_client *client,
-		     struct wl_resource *resource)
-{
-	struct desktop_shell *shell = wl_resource_get_user_data(resource);
-
-	shell->prepare_event_sent = false;
-
-	if (shell->locked)
-		shell->resume_desktop();
-}
-
-static void
-desktop_shell_set_grab_surface(struct wl_client *client,
-			       struct wl_resource *resource,
-			       struct wl_resource *surface_resource)
-{
-	struct desktop_shell *shell = wl_resource_get_user_data(resource);
-
-	shell->grab_surface = wl_resource_get_user_data(surface_resource);
-	weston_view_create(shell->grab_surface);
-}
-
-static void
-desktop_shell_desktop_ready(struct wl_client *client,
-			    struct wl_resource *resource)
-{
-	struct desktop_shell *shell = wl_resource_get_user_data(resource);
-
-	shell_fade_startup(shell);
-}
-
-static void
-desktop_shell_set_panel_position(struct wl_client *client,
-				 struct wl_resource *resource,
-				 uint32_t position)
-{
-	struct desktop_shell *shell = wl_resource_get_user_data(resource);
-
-	if (position != DESKTOP_SHELL_PANEL_POSITION_TOP &&
-	    position != DESKTOP_SHELL_PANEL_POSITION_BOTTOM &&
-	    position != DESKTOP_SHELL_PANEL_POSITION_LEFT &&
-	    position != DESKTOP_SHELL_PANEL_POSITION_RIGHT) {
-		wl_resource_post_error(resource,
-				       DESKTOP_SHELL_ERROR_INVALID_ARGUMENT,
-				       "bad position argument");
-		return;
-	}
-
-	shell->panel_position = position;
-}
-
-static const struct desktop_shell_interface desktop_shell_implementation = {
-	desktop_shell_set_background,
-	desktop_shell_set_panel,
-	desktop_shell_set_lock_surface,
-	desktop_shell_unlock,
-	desktop_shell_set_grab_surface,
-	desktop_shell_desktop_ready,
-	desktop_shell_set_panel_position
-};
-
 static shell_surface_type
 get_shell_surface_type(struct weston_surface *surface)
 {
@@ -2069,7 +1758,7 @@ maximize_binding(struct weston_seat *seat, uint32_t time, uint32_t button, void 
 	if (shsurf == NULL)
 		return;
 
-	if (!shell_surface_is_xdg_surface(shsurf))
+	if (!shsurf->shell_surface_is_xdg_surface())
 		return;
 
 	shsurf->state_requested = true;
@@ -2092,7 +1781,7 @@ fullscreen_binding(struct weston_seat *seat, uint32_t time, uint32_t button, voi
 	if (shsurf == NULL)
 		return;
 
-	if (!shell_surface_is_xdg_surface(shsurf))
+	if (!shsurf->shell_surface_is_xdg_surface())
 		return;
 
 	shsurf->state_requested = true;
@@ -2431,40 +2120,12 @@ touch_to_activate_binding(struct weston_seat *seat, uint32_t time, void *data)
 	activate_binding(seat, data, seat->touch->focus->surface);
 }
 
-static void
-do_shell_fade_startup(void *data)
-{
-	struct desktop_shell *shell = data;
-
-	if (shell->startup_animation_type == ANIMATION_FADE)
-		shell->shell_fade(FADE_IN);
-	else if (shell->startup_animation_type == ANIMATION_NONE) {
-		weston_surface_destroy(shell->fade.view->surface);
-		shell->fade.view = NULL;
-	}
-}
-
-static void
-shell_fade_startup(struct desktop_shell *shell)
-{
-	struct wl_event_loop *loop;
-
-	if (!shell->fade.startup_timer)
-		return;
-
-	wl_event_source_remove(shell->fade.startup_timer);
-	shell->fade.startup_timer = NULL;
-
-	loop = wl_display_get_event_loop(shell->compositor->wl_display);
-	wl_event_loop_add_idle(loop, do_shell_fade_startup, shell);
-}
-
 static int
 fade_startup_timeout(void *data)
 {
 	struct desktop_shell *shell = data;
 
-	shell_fade_startup(shell);
+	shell->shell_fade_startup();
 	return 0;
 }
 
@@ -2805,7 +2466,7 @@ desktop_shell_client_destroy(struct wl_listener *listener, void *data)
 	if (!check_desktop_shell_crash_too_early(shell))
 		respawn_desktop_shell_process(shell);
 
-	shell_fade_startup(shell);
+	shell->shell_fade_startup();
 }
 
 static void
@@ -2841,6 +2502,43 @@ bind_shell(wl_client *client, desktop_shell * shell, uint32_t version, uint32_t 
 	 **/
 	new page::shell_client{client, shell, page::shell_client::API_SHELL, id};
 }
+
+static int
+xdg_shell_unversioned_dispatch(const void *implementation,
+			       void *_target, uint32_t opcode,
+			       const struct wl_message *message,
+			       union wl_argument *args)
+{
+	struct wl_resource *resource = _target;
+	struct shell_client *sc = wl_resource_get_user_data(resource);
+
+	if (opcode != 0) {
+		wl_resource_post_error(resource,
+				       WL_DISPLAY_ERROR_INVALID_OBJECT,
+				       "must call use_unstable_version first");
+		return 0;
+	}
+
+#define XDG_SERVER_VERSION 4
+
+	static_assert(XDG_SERVER_VERSION == XDG_SHELL_VERSION_CURRENT,
+		      "shell implementation doesn't match protocol version");
+
+	if (args[0].i != XDG_SERVER_VERSION) {
+		wl_resource_post_error(resource,
+				       WL_DISPLAY_ERROR_INVALID_OBJECT,
+				       "incompatible version, server is %d "
+				       "client wants %d",
+				       XDG_SERVER_VERSION, args[0].i);
+		return 0;
+	}
+
+	wl_resource_set_implementation(resource, &xdg_implementation,
+				       sc, NULL);
+
+	return 1;
+}
+
 
 static void
 bind_xdg_shell(struct wl_client *client, void *data, uint32_t version, uint32_t id)
@@ -2883,7 +2581,7 @@ bind_desktop_shell(struct wl_client *client,
 		shell->child.desktop_shell = resource;
 
 		if (version < 2)
-			shell_fade_startup(shell);
+			shell->shell_fade_startup();
 
 		return;
 	}
@@ -3670,6 +3368,15 @@ handle_seat_created(struct wl_listener *listener, void *data)
 
 	create_shell_seat(seat);
 }
+
+static int
+screensaver_timeout(void *data)
+{
+	struct desktop_shell *shell = data;
+	shell->shell_fade(FADE_OUT);
+	return 1;
+}
+
 
 /*** THE ENTRY POINT ***/
 WL_EXPORT int

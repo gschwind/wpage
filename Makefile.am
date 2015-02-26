@@ -779,9 +779,14 @@ page_shell_la_CFLAGS = $(GCC_CFLAGS) $(COMPOSITOR_CFLAGS)
 page_shell_la_SOURCES =					\
 	page-shell/client.cxx				\
 	page-shell/surface.cxx				\
+	page-shell/desktop_shell.cxx				\
 	page-shell/grab_handlers.cxx			\
 	page-shell/shell.h				\
 	page-shell/shell.cxx				\
+	page-shell/shell_surface_interface_impl.cxx	\
+	page-shell/xdg_surface_interface_impl.cxx	\
+	page-shell/weston_shell_interface_impl.cxx	\
+	page-shell/protocols_implementation.cxx		\
 	page-shell/exposay.cxx				\
 	page-shell/input-panel.cxx
 nodist_page_shell_la_SOURCES =				\

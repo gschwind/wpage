@@ -15,9 +15,9 @@
 #include "utils.hxx"
 #include "grab_handlers.hxx"
 
-namespace page {
-
 struct shell_surface;
+
+namespace page {
 
 struct shell_client {
 

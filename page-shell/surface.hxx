@@ -11,13 +11,17 @@
 #define PAGE_SHELL_SURFACE_HXX_
 
 #include "compositor.h"
+#include "protocols_implementation.hxx"
+
 #include "client.hxx"
 #include "shell_seat.hxx"
 #include "utils.hxx"
 
 namespace page {
-
 struct shell_client;
+}
+
+using namespace page;
 
 enum shell_surface_type {
 	SHELL_SURFACE_NONE,
@@ -31,8 +35,6 @@ enum shell_surface_type {
  * the diference is in resources interfaces.
  **/
 struct shell_surface {
-	static const struct wl_shell_surface_interface shell_surface_implementation;
-
 	wl_resource *resource;
 	wl_signal destroy_signal;
 	shell_client *owner;
@@ -132,6 +134,7 @@ struct shell_surface {
 	auto surface_move(weston_seat *seat, int client_initiated) -> int;
 	auto surface_rotate(struct weston_seat *seat) -> void;
 	auto surface_touch_move(weston_seat *seat) -> int;
+	auto surface_resize(struct weston_seat *seat, uint32_t edges) -> int;
 
 	static auto get_shell_surface(struct weston_surface *surface) -> shell_surface *;
 	static auto shell_surface_configure(struct weston_surface *es, int32_t sx, int32_t sy) -> void;
@@ -161,10 +164,17 @@ struct shell_surface {
 
 	/* commun implementation */
 	static void common_surface_move(wl_resource *resource, wl_resource *seat_resource, uint32_t serial);
+	static void common_surface_resize(struct wl_resource *resource,
+			      struct wl_resource *seat_resource, uint32_t serial,
+			      uint32_t edges);
+
+	void surface_clear_next_states();
+	void shell_surface_set_output(struct weston_output *output);
+	void set_popup(struct weston_surface *parent, struct weston_seat *seat, uint32_t serial, int32_t x, int32_t y);
+	void set_fullscreen(uint32_t method, uint32_t framerate, struct weston_output *output);
 
 
 };
 
-}
 
 #endif /* PAGE_SHELL_SURFACE_HXX_ */

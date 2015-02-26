@@ -9,11 +9,11 @@
 #ifndef PAGE_SHELL_DESKTOP_SHELL_HXX_
 #define PAGE_SHELL_DESKTOP_SHELL_HXX_
 
+#include "compositor.h"
 #include "desktop-shell-server-protocol.h"
 
 #include "exposay.hxx"
-#include "grab_handlers.hxx"
-
+#include "focus_state.hxx"
 
 enum animation_type {
 	ANIMATION_NONE,
@@ -127,87 +127,27 @@ struct desktop_shell {
 
 	struct timespec startup_time;
 
+	void get_output_work_area(struct weston_output *output, pixman_rectangle32_t *area);
+	void get_output_panel_size(struct weston_output *output, int *width, int *height);
+	void drop_focus_state(struct workspace *ws, struct weston_surface *surface);
+	void move_surface_to_workspace(shell_surface *shsurf, uint32_t workspace);
+	workspace * get_workspace(unsigned int index);
 
-	void get_output_work_area(
-			     struct weston_output *output,
-			     pixman_rectangle32_t *area)
-	{
-		int32_t panel_width = 0, panel_height = 0;
+	void shell_fade(fade_type type);
+	struct weston_view * shell_fade_create_surface();
 
-		area->x = 0;
-		area->y = 0;
+	static void shell_fade_done(struct weston_view_animation *animation, void *data);
+	static void handle_screensaver_sigchld(struct weston_process *proc, int status);
 
-		this->get_output_panel_size(output, &panel_width, &panel_height);
+	void unlock();
+	void lock();
 
-		switch (this->panel_position) {
-		case DESKTOP_SHELL_PANEL_POSITION_TOP:
-		default:
-			area->y = panel_height;
-		case DESKTOP_SHELL_PANEL_POSITION_BOTTOM:
-			area->width = output->width;
-			area->height = output->height - panel_height;
-			break;
-		case DESKTOP_SHELL_PANEL_POSITION_LEFT:
-			area->x = panel_width;
-		case DESKTOP_SHELL_PANEL_POSITION_RIGHT:
-			area->width = output->width - panel_width;
-			area->height = output->height;
-			break;
-		}
-	}
+	void launch_screensaver();
+	void unfocus_all_seats();
+	void resume_desktop();
+	void terminate_screensaver();
 
-	void get_output_panel_size(
-			      struct weston_output *output,
-			      int *width,
-			      int *height)
-	{
-		struct weston_view *view;
-
-		*width = 0;
-		*height = 0;
-
-		if (!output)
-			return;
-
-		wl_list_for_each(view, &this->panel_layer.view_list.link, layer_link.link) {
-			float x, y;
-
-			if (view->surface->output != output)
-				continue;
-
-			switch (this->panel_position) {
-			case DESKTOP_SHELL_PANEL_POSITION_TOP:
-			case DESKTOP_SHELL_PANEL_POSITION_BOTTOM:
-
-				weston_view_to_global_float(view,
-							    view->surface->width, 0,
-							    &x, &y);
-
-				*width = (int) x;
-				*height = view->surface->height + (int) y;
-				return;
-
-			case DESKTOP_SHELL_PANEL_POSITION_LEFT:
-			case DESKTOP_SHELL_PANEL_POSITION_RIGHT:
-				weston_view_to_global_float(view,
-							    0, view->surface->height,
-							    &x, &y);
-
-				*width = view->surface->width + (int) x;
-				*height = (int) y;
-				return;
-
-			default:
-				/* we've already set width and height to
-				 * fallback values. */
-				break;
-			}
-		}
-
-		/* the correct view wasn't found */
-	}
-
-
+	void restore_focus_state(struct workspace *ws);
 
 };
 

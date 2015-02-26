@@ -220,7 +220,7 @@ exposay_layout(struct desktop_shell *shell, struct shell_output *shell_output)
 
 	eoutput->num_surfaces = 0;
 	wl_list_for_each(view, &workspace->layer.view_list.link, layer_link.link) {
-		if (!page::shell_surface::get_shell_surface(view->surface))
+		if (!shell_surface::get_shell_surface(view->surface))
 			continue;
 		if (view->output != output)
 			continue;
@@ -277,7 +277,7 @@ exposay_layout(struct desktop_shell *shell, struct shell_output *shell_output)
 
 		pad = eoutput->surface_size + eoutput->padding_inner;
 
-		if (!page::shell_surface::get_shell_surface(view->surface))
+		if (!shell_surface::get_shell_surface(view->surface))
 			continue;
 		if (view->output != output)
 			continue;

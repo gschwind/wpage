@@ -125,7 +125,7 @@ void shell_client::shell_get_shell_surface(
 		wl_resource_create(client,
 				   &wl_shell_surface_interface, 1, id);
 	wl_resource_set_implementation(shsurf->resource,
-				       &shell_surface::shell_surface_implementation,
+				       &page::shell_surface_implementation,
 				       shsurf, shell_surface::shell_destroy_shell_surface);
 
 }
@@ -147,7 +147,7 @@ void shell_client::shell_client_pong(uint32_t serial)
 
 void shell_client::send_configure(weston_surface *surface, int32_t width, int32_t height)
 {
-	page::shell_surface *shsurf = page::shell_surface::get_shell_surface(surface);
+	shell_surface *shsurf = shell_surface::get_shell_surface(surface);
 	assert(shsurf);
 	if (shsurf->resource)
 		wl_shell_surface_send_configure(shsurf->resource, shsurf->resize_edges, width, height);

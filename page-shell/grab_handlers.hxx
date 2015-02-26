@@ -13,19 +13,18 @@
 #include "compositor.h"
 #include "surface.hxx"
 
-namespace page {
 struct shell_surface;
-}
+
 
 struct shell_grab {
 	struct weston_pointer_grab grab;
-	page::shell_surface *shsurf;
+	shell_surface *shsurf;
 	struct wl_listener shsurf_destroy_listener;
 };
 
 struct shell_touch_grab {
 	struct weston_touch_grab grab;
-	page::shell_surface *shsurf;
+	shell_surface *shsurf;
 	struct wl_listener shsurf_destroy_listener;
 	struct weston_touch *touch;
 };
@@ -68,13 +67,13 @@ extern const struct weston_pointer_grab_interface resize_grab_interface;
 
 void end_busy_cursor(struct weston_compositor *compositor, struct wl_client *client);
 
-void shell_grab_start(struct shell_grab *grab, const struct weston_pointer_grab_interface *interface, page::shell_surface *shsurf, struct weston_pointer *pointer, enum desktop_shell_cursor cursor);
+void shell_grab_start(struct shell_grab *grab, const struct weston_pointer_grab_interface *interface, shell_surface *shsurf, struct weston_pointer *pointer, enum desktop_shell_cursor cursor);
 void shell_grab_end(struct shell_grab *grab);
 
 void popup_grab_end(struct weston_pointer *pointer);
 void touch_popup_grab_end(struct weston_touch *touch);
 
-void shell_touch_grab_start(struct shell_touch_grab *grab, const struct weston_touch_grab_interface *interface, page::shell_surface *shsurf, struct weston_touch *touch);
+void shell_touch_grab_start(struct shell_touch_grab *grab, const struct weston_touch_grab_interface *interface, shell_surface *shsurf, struct weston_touch *touch);
 void shell_touch_grab_end(struct shell_touch_grab *grab);
 
 #endif /* PAGE_SHELL_GRAB_HANDLERS_HXX_ */

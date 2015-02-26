@@ -35,31 +35,11 @@
 #include "shell_seat.hxx"
 #include "client.hxx"
 #include "surface.hxx"
+#include "exposay.hxx"
 
-struct focus_surface {
-	struct weston_surface *surface;
-	struct weston_view *view;
-	struct weston_transform workspace_transform;
-};
-
-struct workspace {
-	struct weston_layer layer;
-
-	struct wl_list focus_list;
-	struct wl_listener seat_destroyed_listener;
-
-	struct focus_surface *fsurf_front;
-	struct focus_surface *fsurf_back;
-	struct weston_view_animation *focus_animation;
-};
-
-struct shell_output {
-	struct desktop_shell  *shell;
-	struct weston_output  *output;
-	struct exposay_output eoutput;
-	struct wl_listener    destroy_listener;
-	struct wl_list        link;
-};
+void
+center_on_output(struct weston_view *view,
+		 struct weston_output *output);
 
 struct weston_output *
 get_default_output(struct weston_compositor *compositor);
@@ -95,7 +75,7 @@ shell_for_each_layer(struct desktop_shell *shell,
 		     void *data);
 
 void
-map(struct desktop_shell *shell, page::shell_surface *shsurf,
+map(struct desktop_shell *shell, shell_surface *shsurf,
     int32_t sx, int32_t sy);
 
 void
@@ -111,5 +91,7 @@ void weston_view_set_initial_position(struct weston_view *view,
 				 struct desktop_shell *shell);
 
 void restore_output_mode(struct weston_output *output);
+
+page::shell_seat * get_shell_seat(weston_seat *seat);
 
 #endif

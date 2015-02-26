@@ -124,7 +124,7 @@ move_grab_cancel(struct weston_pointer_grab *grab)
  void
 shell_grab_start(struct shell_grab *grab,
 		 const struct weston_pointer_grab_interface *interface,
-		 page::shell_surface *shsurf,
+		 shell_surface *shsurf,
 		 struct weston_pointer *pointer,
 		 enum desktop_shell_cursor cursor)
 {
@@ -156,7 +156,7 @@ shell_grab_start(struct shell_grab *grab,
 void
 shell_touch_grab_start(struct shell_touch_grab *grab,
 		       const struct weston_touch_grab_interface *interface,
-		       page::shell_surface *shsurf,
+		       shell_surface *shsurf,
 		       struct weston_touch *touch)
 {
 	desktop_shell *shell = shsurf->shell;
@@ -257,7 +257,7 @@ busy_cursor_grab_button(struct weston_pointer_grab *base,
 			uint32_t time, uint32_t button, uint32_t state)
 {
 	struct shell_grab *grab = (struct shell_grab *) base;
-	page::shell_surface *shsurf = grab->shsurf;
+	shell_surface *shsurf = grab->shsurf;
 	struct weston_seat *seat = grab->grab.pointer->seat;
 
 	if (shsurf && button == BTN_LEFT && state) {
@@ -291,7 +291,7 @@ move_grab_motion(struct weston_pointer_grab *grab, uint32_t time,
 {
 	struct weston_move_grab *move = (struct weston_move_grab *) grab;
 	struct weston_pointer *pointer = grab->pointer;
-	page::shell_surface *shsurf = move->base.shsurf;
+	shell_surface *shsurf = move->base.shsurf;
 	int cx, cy;
 
 	weston_pointer_move(pointer, x, y);
@@ -343,7 +343,7 @@ touch_move_grab_motion(struct weston_touch_grab *grab, uint32_t time,
 		       int touch_id, wl_fixed_t sx, wl_fixed_t sy)
 {
 	struct weston_touch_move_grab *move = (struct weston_touch_move_grab *) grab;
-	page::shell_surface *shsurf = move->base.shsurf;
+	shell_surface *shsurf = move->base.shsurf;
 	struct weston_surface *es;
 	int dx = wl_fixed_to_int(grab->touch->grab_x + move->dx);
 	int dy = wl_fixed_to_int(grab->touch->grab_y + move->dy);
@@ -383,7 +383,7 @@ rotate_grab_motion(struct weston_pointer_grab *grab, uint32_t time,
 	struct rotate_grab *rotate =
 		container_of(grab, struct rotate_grab, base.grab);
 	struct weston_pointer *pointer = grab->pointer;
-	page::shell_surface *shsurf = rotate->base.shsurf;
+	shell_surface *shsurf = rotate->base.shsurf;
 	float cx, cy, dx, dy, cposx, cposy, dposx, dposy, r;
 
 	weston_pointer_move(pointer, x, y);
@@ -448,7 +448,7 @@ rotate_grab_button(struct weston_pointer_grab *grab,
 	struct rotate_grab *rotate =
 		container_of(grab, struct rotate_grab, base.grab);
 	struct weston_pointer *pointer = grab->pointer;
-	page::shell_surface *shsurf = rotate->base.shsurf;
+	shell_surface *shsurf = rotate->base.shsurf;
 	enum wl_pointer_button_state state = state_w;
 
 	if (pointer->button_count == 0 &&
@@ -478,7 +478,7 @@ resize_grab_motion(struct weston_pointer_grab *grab, uint32_t time,
 {
 	struct weston_resize_grab *resize = (struct weston_resize_grab *) grab;
 	struct weston_pointer *pointer = grab->pointer;
-	page::shell_surface *shsurf = resize->base.shsurf;
+	shell_surface *shsurf = resize->base.shsurf;
 	int32_t width, height;
 	wl_fixed_t from_x, from_y;
 	wl_fixed_t to_x, to_y;
@@ -533,6 +533,89 @@ resize_grab_cancel(struct weston_pointer_grab *grab)
 
 	shell_grab_end(&resize->base);
 	free(grab);
+}
+
+static void
+popup_grab_focus(struct weston_pointer_grab *grab)
+{
+	struct weston_pointer *pointer = grab->pointer;
+	struct weston_view *view;
+	page::shell_seat *shseat =
+	    container_of(grab, page::shell_seat, popup_grab.grab);
+	struct wl_client *client = shseat->popup_grab.client;
+	wl_fixed_t sx, sy;
+
+	view = weston_compositor_pick_view(pointer->seat->compositor,
+					   pointer->x, pointer->y,
+					   &sx, &sy);
+
+	if (view && view->surface->resource &&
+	    wl_resource_get_client(view->surface->resource) == client) {
+		weston_pointer_set_focus(pointer, view, sx, sy);
+	} else {
+		weston_pointer_set_focus(pointer, NULL,
+					 wl_fixed_from_int(0),
+					 wl_fixed_from_int(0));
+	}
+}
+
+
+static void
+popup_grab_motion(struct weston_pointer_grab *grab, uint32_t time,
+		  wl_fixed_t x, wl_fixed_t y)
+{
+	struct weston_pointer *pointer = grab->pointer;
+	struct wl_resource *resource;
+	wl_fixed_t sx, sy;
+
+	if (pointer->focus) {
+		weston_view_from_global_fixed(pointer->focus, x, y,
+					      &pointer->sx, &pointer->sy);
+	}
+
+	weston_pointer_move(pointer, x, y);
+
+	wl_resource_for_each(resource, &pointer->focus_resource_list) {
+		weston_view_from_global_fixed(pointer->focus,
+					      pointer->x, pointer->y,
+					      &sx, &sy);
+		wl_pointer_send_motion(resource, time, sx, sy);
+	}
+}
+
+static void
+popup_grab_button(struct weston_pointer_grab *grab,
+		  uint32_t time, uint32_t button, uint32_t state_w)
+{
+	struct wl_resource *resource;
+	page::shell_seat *shseat =
+	    container_of(grab, page::shell_seat, popup_grab.grab);
+	struct wl_display *display = shseat->seat->compositor->wl_display;
+	enum wl_pointer_button_state state = state_w;
+	uint32_t serial;
+	struct wl_list *resource_list;
+
+	resource_list = &grab->pointer->focus_resource_list;
+	if (!wl_list_empty(resource_list)) {
+		serial = wl_display_get_serial(display);
+		wl_resource_for_each(resource, resource_list) {
+			wl_pointer_send_button(resource, serial,
+					       time, button, state);
+		}
+	} else if (state == WL_POINTER_BUTTON_STATE_RELEASED &&
+		   (shseat->popup_grab.initial_up ||
+		    time - shseat->seat->pointer->grab_time > 500)) {
+		popup_grab_end(grab->pointer);
+	}
+
+	if (state == WL_POINTER_BUTTON_STATE_RELEASED)
+		shseat->popup_grab.initial_up = 1;
+}
+
+static void
+popup_grab_cancel(struct weston_pointer_grab *grab)
+{
+	popup_grab_end(grab->pointer);
 }
 
 

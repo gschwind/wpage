@@ -146,22 +146,6 @@ struct shell_surface {
 	void send_configure_for_surface();
 	void shell_surface_state_changed();
 
-
-	/**
-	 * Implementation of server side shell_surface API
-	 **/
-
-	static auto shell_surface_pong(wl_client *client, wl_resource *resource, uint32_t serial) -> void;
-	static auto shell_surface_move(wl_client *client, wl_resource *resource, wl_resource *seat_resource, uint32_t serial) -> void;
-	static auto shell_surface_resize(wl_client *client, wl_resource *resource, wl_resource *seat_resource, uint32_t serial, uint32_t edges) -> void;
-	static auto shell_surface_set_toplevel(wl_client *client, wl_resource *resource) -> void;
-	static auto	shell_surface_set_transient(wl_client *client, wl_resource *resource, wl_resource *parent_resource, int x, int y, uint32_t flags) -> void;
-	static auto shell_surface_set_fullscreen(wl_client *client, wl_resource *resource, uint32_t method, uint32_t framerate, wl_resource *output_resource) -> void;
-	static auto shell_surface_set_popup(wl_client *client, wl_resource *resource, wl_resource *seat_resource, uint32_t serial, struct wl_resource *parent_resource, int32_t x, int32_t y, uint32_t flags) -> void;
-	static auto shell_surface_set_maximized(wl_client *client, wl_resource *resource, wl_resource *output_resource) -> void;
-	static auto shell_surface_set_title(wl_client *client, wl_resource *resource, const char *title) -> void;
-	static auto shell_surface_set_class(wl_client *client, wl_resource *resource, const char *class_name) -> void;
-
 	/* commun implementation */
 	static void common_surface_move(wl_resource *resource, wl_resource *seat_resource, uint32_t serial);
 	static void common_surface_resize(struct wl_resource *resource,
@@ -173,6 +157,9 @@ struct shell_surface {
 	void set_popup(struct weston_surface *parent, struct weston_seat *seat, uint32_t serial, int32_t x, int32_t y);
 	void set_fullscreen(uint32_t method, uint32_t framerate, struct weston_output *output);
 	bool shell_surface_is_xdg_popup();
+
+	void shell_surface_lose_keyboard_focus();
+	void shell_surface_gain_keyboard_focus();
 
 };
 

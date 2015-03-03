@@ -13,8 +13,7 @@
 #include "compositor.h"
 #include "surface.hxx"
 
-struct shell_surface;
-
+namespace page {
 
 struct shell_grab {
 	struct weston_pointer_grab grab;
@@ -57,13 +56,14 @@ struct weston_resize_grab {
 	int32_t width, height;
 };
 
-
 extern const struct weston_pointer_grab_interface move_grab_interface;
-extern const weston_pointer_grab_interface popup_grab_interface;
+extern const struct weston_pointer_grab_interface popup_grab_interface;
 extern const struct weston_pointer_grab_interface busy_cursor_grab_interface;
-extern const struct weston_touch_grab_interface touch_move_grab_interface;
 extern const struct weston_pointer_grab_interface rotate_grab_interface;
 extern const struct weston_pointer_grab_interface resize_grab_interface;
+
+extern const struct weston_touch_grab_interface touch_move_grab_interface;
+extern const struct weston_touch_grab_interface touch_popup_grab_interface;
 
 void end_busy_cursor(struct weston_compositor *compositor, struct wl_client *client);
 
@@ -75,5 +75,9 @@ void touch_popup_grab_end(struct weston_touch *touch);
 
 void shell_touch_grab_start(struct shell_touch_grab *grab, const struct weston_touch_grab_interface *interface, shell_surface *shsurf, struct weston_touch *touch);
 void shell_touch_grab_end(struct shell_touch_grab *grab);
+
+void shell_surface_send_popup_done(shell_surface *shsurf);
+
+}
 
 #endif /* PAGE_SHELL_GRAB_HANDLERS_HXX_ */

@@ -693,8 +693,38 @@ std::list<T> make_list(std::vector<T> const & v) {
 
 static unsigned int const ALL_DESKTOP = static_cast<unsigned int>(-1);
 
-template<typename T>
+
+template<typename T, typename ... DATA_TYPES>
 struct cxx_wl_listener {
+	wl_listener listener;
+
+	using func_t = void (T::*) (DATA_TYPES* ... args);
+	T * data;
+	func_t callback;
+
+	cxx_wl_listener(T * data, func_t callback) : data{data}, callback{callback} {
+		wl_list_init(&listener.link);
+		listener.notify = reinterpret_cast<wl_notify_func_t>(cxx_wl_listener::call);
+	}
+
+	cxx_wl_listener() : data{data}, callback{callback} {
+		wl_list_init(&listener.link);
+		listener.notify = reinterpret_cast<wl_notify_func_t>(cxx_wl_listener::noop);
+	}
+
+	static void call(cxx_wl_listener * listener, DATA_TYPES* ... data) {
+		auto callback = listener->callback;
+		(listener->data->*callback)(data...);
+	}
+
+	static void noop(cxx_wl_listener * listener, DATA_TYPES* ... data) {
+
+	}
+
+};
+
+template<typename T>
+struct cxx_wl_listener<T> {
 	wl_listener listener;
 
 	using func_t = void (T::*) ();
@@ -703,7 +733,12 @@ struct cxx_wl_listener {
 
 	cxx_wl_listener(T * data, func_t callback) : data{data}, callback{callback} {
 		wl_list_init(&listener.link);
-		listener.notify = reinterpret_cast<wl_notify_func_t>(call);
+		listener.notify = reinterpret_cast<wl_notify_func_t>(cxx_wl_listener::call);
+	}
+
+	cxx_wl_listener() : data{data}, callback{callback} {
+		wl_list_init(&listener.link);
+		listener.notify = reinterpret_cast<wl_notify_func_t>(cxx_wl_listener::noop);
 	}
 
 	static void call(cxx_wl_listener<T> * listener, void * data) {
@@ -711,7 +746,12 @@ struct cxx_wl_listener {
 		(listener->data->*callback)();
 	}
 
+	static void noop(cxx_wl_listener<T> * listener, void * data) {
+
+	}
+
 };
+
 
 }
 

@@ -49,6 +49,7 @@ weston_LDADD = $(COMPOSITOR_LIBS) $(LIBUNWIND_LIBS) \
 weston_SOURCES =					\
 	src/git-version.h				\
 	src/log.c					\
+	src/demangle.cxx				\
 	src/compositor.c				\
 	src/compositor.h				\
 	src/input.c					\

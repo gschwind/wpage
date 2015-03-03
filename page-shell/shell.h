@@ -90,14 +90,6 @@ shell_for_each_layer(struct desktop_shell *shell,
 		     shell_for_each_layer_func_t func,
 		     void *data);
 
-void
-map(struct desktop_shell *shell, shell_surface *shsurf,
-    int32_t sx, int32_t sy);
-
-void
-configure(struct desktop_shell *shell, struct weston_surface *surface,
-	  float x, float y);
-
 void fade_out_done(struct weston_view_animation *animation, void *data);
 
 void surface_subsurfaces_boundingbox(struct weston_surface *surface, int32_t *x,

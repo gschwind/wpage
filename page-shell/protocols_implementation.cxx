@@ -239,7 +239,7 @@ xdg_get_xdg_surface(struct wl_client *client,
 				       shsurf, shell_surface::shell_destroy_shell_surface);
 
 	/** force size to 100x100 when xdg_surface is created **/
-	xdg_client.send_configure(surface, 157, 277);
+	//xdg_client.send_configure(surface, 157, 277);
 	//weston_surface_set_size(surface, 100, 100);
 
 }

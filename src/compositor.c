@@ -61,6 +61,7 @@
 #include "../shared/os-compatibility.h"
 #include "git-version.h"
 #include "version.h"
+#include "demangle.h"
 
 static struct wl_list child_process_list;
 static struct weston_compositor *segv_compositor;
@@ -4693,7 +4694,8 @@ print_backtrace(void)
 	unw_word_t off;
 	unw_proc_info_t pip;
 	int ret, i = 0;
-	char procname[256];
+	char procname[1024];
+	char demangled_procname[1024];
 	const char *filename;
 	Dl_info dlinfo;
 
@@ -4718,7 +4720,7 @@ print_backtrace(void)
 			break;
 		}
 
-		ret = unw_get_proc_name(&cursor, procname, 256, &off);
+		ret = unw_get_proc_name(&cursor, procname, 1024, &off);
 		if (ret && ret != -UNW_ENOMEM) {
 			if (ret != -UNW_EUNSPEC)
 				weston_log("unw_get_proc_name: %d\n", ret);
@@ -4726,13 +4728,15 @@ print_backtrace(void)
 			procname[1] = 0;
 		}
 
+		demangle(procname, demangled_procname, 1024);
+
 		if (dladdr((void *)(pip.start_ip + off), &dlinfo) && dlinfo.dli_fname &&
 		    *dlinfo.dli_fname)
 			filename = dlinfo.dli_fname;
 		else
 			filename = "?";
 
-		weston_log("%u: %s (%s%s+0x%x) [%p]\n", i++, filename, procname,
+		weston_log("%u: %s (%s%s+0x%x) [%p]\n", i++, filename, demangled_procname,
 			   ret == -UNW_ENOMEM ? "..." : "", (int)off, (void *)(pip.start_ip + off));
 
 		ret = unw_step(&cursor);

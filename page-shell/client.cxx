@@ -34,11 +34,7 @@ const struct weston_shell_client shell_client::shell_client_impl = {
  * Create structure to handle a client.
  * In particular wl_shell or xdg_shell protocol.
  */
-shell_client::shell_client(
-		wl_client *client,
-		desktop_shell *shell,
-		api type,
-		uint32_t id) :
+shell_client::shell_client(wl_client *client, desktop_shell *shell, api type, uint32_t id) :
 resource{nullptr},
 client{client},
 shell{shell},
@@ -101,9 +97,8 @@ void shell_client::shell_get_shell_surface(
 		uint32_t id,
 		wl_resource *surface_resource)
 {
-	auto surface =
-		reinterpret_cast<weston_surface*>(wl_resource_get_user_data(surface_resource));
-	auto sc = reinterpret_cast<page::shell_client*>(wl_resource_get_user_data(resource));
+	auto surface = reinterpret_cast<weston_surface*>(wl_resource_get_user_data(surface_resource));
+	auto sc = reinterpret_cast<shell_client*>(wl_resource_get_user_data(resource));
 	auto shell = sc->shell;
 
 	if (shell_surface::get_shell_surface(surface)) {

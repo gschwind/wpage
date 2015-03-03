@@ -57,5 +57,7 @@ struct exposay {
 	bool mod_invalid;
 };
 
+void x_exposay_binding(struct weston_seat *seat, weston_keyboard_modifier modifier, void *data);
+
 
 #endif /* PAGE_SHELL_EXPOSAY_HXX_ */

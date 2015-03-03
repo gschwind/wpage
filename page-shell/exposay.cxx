@@ -645,7 +645,7 @@ exposay_set_state(struct desktop_shell *shell, enum exposay_target_state state,
 }
 
 void
-exposay_binding(struct weston_seat *seat, enum weston_keyboard_modifier modifier,
+x_exposay_binding(struct weston_seat *seat, weston_keyboard_modifier modifier,
 		void *data)
 {
 	struct desktop_shell *shell = data;

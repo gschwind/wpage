@@ -36,6 +36,7 @@
 #include "client.hxx"
 #include "surface.hxx"
 #include "exposay.hxx"
+#include "desktop_shell.hxx"
 
 void
 center_on_output(struct weston_view *view,
@@ -44,23 +45,38 @@ center_on_output(struct weston_view *view,
 struct weston_output *
 get_default_output(struct weston_compositor *compositor);
 
-struct weston_view *
-get_default_view(struct weston_surface *surface);
+namespace page {
+extern weston_view * get_default_view(weston_surface *surface);
+}
 
 struct workspace *
 get_current_workspace(struct desktop_shell *shell);
 
 void
+activate_workspace( desktop_shell *shell, unsigned int index);
+
+workspace * workspace_create();
+
+void
+animate_workspace_change_frame(weston_animation *animation,
+			        weston_output *output, uint32_t msecs);
+
+void
+setup_output_destroy_handler(struct weston_compositor *ec,
+							struct desktop_shell *shell);
+
+void
 lower_fullscreen_layer(struct desktop_shell *shell);
 
+namespace page {
 void
 activate(struct desktop_shell *shell, struct weston_surface *es,
 	 struct weston_seat *seat, bool configure);
+}
 
 void
-exposay_binding(struct weston_seat *seat,
-		enum weston_keyboard_modifier modifier,
-		void *data);
+workspace_destroy(struct workspace *ws);
+
 int
 input_panel_setup(struct desktop_shell *shell);
 void
@@ -92,6 +108,16 @@ void weston_view_set_initial_position(struct weston_view *view,
 
 void restore_output_mode(struct weston_output *output);
 
-page::shell_seat * get_shell_seat(weston_seat *seat);
+void
+ping_handler(struct weston_surface *surface, uint32_t serial);
+
+int
+xdg_shell_unversioned_dispatch(const void *implementation,
+			       void *_target, uint32_t opcode,
+			       const struct wl_message *message,
+			       union wl_argument *args);
+
+bool
+is_black_surface (struct weston_surface *es, struct weston_surface **fs_surface);
 
 #endif

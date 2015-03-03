@@ -24,8 +24,12 @@ struct shell_client {
 	static const struct wl_shell_interface shell_implementation;
 	static const struct weston_shell_client shell_client_impl;
 
-	wl_resource *resource;
-	wl_client *client;
+	/* this resources will handler client request */
+	wl_resource * resource;
+	/* this is the current wayland client handle by this struct */
+	wl_client * client;
+
+	/* the parent */
 	desktop_shell *shell;
 	cxx_wl_listener<shell_client> destroy_listener;
 	wl_event_source *ping_timer;

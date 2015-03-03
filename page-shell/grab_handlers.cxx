@@ -7,8 +7,12 @@
  *
  */
 
-
 #include "grab_handlers.hxx"
+
+#include <cassert>
+
+
+namespace page {
 
 static void noop_grab_focus(struct weston_pointer_grab *grab);
 static void move_grab_motion(struct weston_pointer_grab *grab, uint32_t time, wl_fixed_t x, wl_fixed_t y);
@@ -31,13 +35,17 @@ const weston_pointer_grab_interface popup_grab_interface = {
 	popup_grab_focus,
 	popup_grab_motion,
 	popup_grab_button,
-	popup_grab_cancel,
+	popup_grab_cancel
 };
 
 void destroy_shell_grab_shsurf(struct wl_listener *listener, void *data);
 
 weston_view * get_default_view(weston_surface *surface);
+
+
 void activate(struct desktop_shell *shell, struct weston_surface *es, struct weston_seat *seat, bool configure);
+
+
 static void constrain_position(struct weston_move_grab *move, int *cx, int *cy);
 
 static void busy_cursor_grab_button(struct weston_pointer_grab *base, uint32_t time, uint32_t button, uint32_t state);
@@ -49,7 +57,7 @@ const struct weston_pointer_grab_interface busy_cursor_grab_interface = {
 	busy_cursor_grab_focus,
 	busy_cursor_grab_motion,
 	busy_cursor_grab_button,
-	busy_cursor_grab_cancel,
+	busy_cursor_grab_cancel
 };
 
 static void touch_move_grab_down(struct weston_touch_grab *grab, uint32_t time, int touch_id, wl_fixed_t sx, wl_fixed_t sy);
@@ -63,7 +71,7 @@ const struct weston_touch_grab_interface touch_move_grab_interface = {
 	touch_move_grab_up,
 	touch_move_grab_motion,
 	touch_move_grab_frame,
-	touch_move_grab_cancel,
+	touch_move_grab_cancel
 };
 
 static void rotate_grab_motion(struct weston_pointer_grab *grab, uint32_t time, wl_fixed_t x, wl_fixed_t y);
@@ -74,7 +82,7 @@ const struct weston_pointer_grab_interface rotate_grab_interface = {
 	noop_grab_focus,
 	rotate_grab_motion,
 	rotate_grab_button,
-	rotate_grab_cancel,
+	rotate_grab_cancel
 };
 
 
@@ -87,7 +95,7 @@ const struct weston_pointer_grab_interface resize_grab_interface = {
 	noop_grab_focus,
 	resize_grab_motion,
 	resize_grab_button,
-	resize_grab_cancel,
+	resize_grab_cancel
 };
 
 
@@ -647,4 +655,149 @@ constrain_position(struct weston_move_grab *move, int *cx, int *cy)
 	*cy = y;
 }
 
+
+
+static void
+touch_popup_grab_down(struct weston_touch_grab *grab, uint32_t time,
+		      int touch_id, wl_fixed_t sx, wl_fixed_t sy)
+{
+	struct wl_resource *resource;
+	page::shell_seat *shseat =
+	    container_of(grab, page::shell_seat, popup_grab.touch_grab);
+	struct wl_display *display = shseat->seat->compositor->wl_display;
+	uint32_t serial;
+	struct wl_list *resource_list;
+
+	resource_list = &grab->touch->focus_resource_list;
+	if (!wl_list_empty(resource_list)) {
+		serial = wl_display_get_serial(display);
+		wl_resource_for_each(resource, resource_list) {
+			wl_touch_send_down(resource, serial, time,
+				grab->touch->focus->surface->resource,
+				touch_id, sx, sy);
+		}
+	}
+}
+
+static void
+touch_popup_grab_up(struct weston_touch_grab *grab, uint32_t time, int touch_id)
+{
+	struct wl_resource *resource;
+	page::shell_seat *shseat =
+	    container_of(grab, page::shell_seat, popup_grab.touch_grab);
+	struct wl_display *display = shseat->seat->compositor->wl_display;
+	uint32_t serial;
+	struct wl_list *resource_list;
+
+	resource_list = &grab->touch->focus_resource_list;
+	if (!wl_list_empty(resource_list)) {
+		serial = wl_display_get_serial(display);
+		wl_resource_for_each(resource, resource_list) {
+			wl_touch_send_up(resource, serial, time, touch_id);
+		}
+	}
+}
+
+static void
+touch_popup_grab_motion(struct weston_touch_grab *grab, uint32_t time,
+			int touch_id, wl_fixed_t sx, wl_fixed_t sy)
+{
+	struct wl_resource *resource;
+	struct wl_list *resource_list;
+
+	resource_list = &grab->touch->focus_resource_list;
+	if (!wl_list_empty(resource_list)) {
+		wl_resource_for_each(resource, resource_list) {
+			wl_touch_send_motion(resource, time, touch_id, sx, sy);
+		}
+	}
+}
+
+static void
+touch_popup_grab_frame(struct weston_touch_grab *grab)
+{
+}
+
+static void
+touch_popup_grab_cancel(struct weston_touch_grab *grab)
+{
+	touch_popup_grab_end(grab->touch);
+}
+
+const struct weston_touch_grab_interface touch_popup_grab_interface = {
+	touch_popup_grab_down,
+	touch_popup_grab_up,
+	touch_popup_grab_motion,
+	touch_popup_grab_frame,
+	touch_popup_grab_cancel,
+};
+
+
+
+void shell_surface_send_popup_done(shell_surface *shsurf)
+{
+	if (shsurf->shell_surface_is_wl_shell_surface())
+		wl_shell_surface_send_popup_done(shsurf->resource);
+	else if (shsurf->shell_surface_is_xdg_popup())
+		xdg_popup_send_popup_done(shsurf->resource,
+					  shsurf->popup.serial);
+}
+
+
+void touch_popup_grab_end(struct weston_touch *touch)
+{
+	struct weston_touch_grab *grab = touch->grab;
+	page::shell_seat *shseat =
+	    container_of(grab, page::shell_seat, popup_grab.touch_grab);
+	shell_surface *shsurf;
+	shell_surface *prev = NULL;
+
+	if (touch->grab->interface == &touch_popup_grab_interface) {
+		weston_touch_end_grab(grab->touch);
+		shseat->popup_grab.client = NULL;
+		shseat->popup_grab.touch_grab.interface = NULL;
+		assert(!wl_list_empty(&shseat->popup_grab.surfaces_list));
+		/* Send the popup_done event to all the popups open */
+		wl_list_for_each(shsurf, &shseat->popup_grab.surfaces_list, popup.grab_link) {
+			shell_surface_send_popup_done(shsurf);
+			shsurf->popup.shseat = NULL;
+			if (prev) {
+				wl_list_init(&prev->popup.grab_link);
+			}
+			prev = shsurf;
+		}
+		wl_list_init(&prev->popup.grab_link);
+		wl_list_init(&shseat->popup_grab.surfaces_list);
+	}
+}
+
+void popup_grab_end(struct weston_pointer *pointer)
+{
+	struct weston_pointer_grab *grab = pointer->grab;
+	page::shell_seat *shseat =
+	    container_of(grab, page::shell_seat, popup_grab.grab);
+	shell_surface *shsurf;
+	shell_surface *prev = NULL;
+
+	if (pointer->grab->interface == &popup_grab_interface) {
+		weston_pointer_end_grab(grab->pointer);
+		shseat->popup_grab.client = NULL;
+		shseat->popup_grab.grab.interface = NULL;
+		assert(!wl_list_empty(&shseat->popup_grab.surfaces_list));
+		/* Send the popup_done event to all the popups open */
+		wl_list_for_each(shsurf, &shseat->popup_grab.surfaces_list, popup.grab_link) {
+			shell_surface_send_popup_done(shsurf);
+			shsurf->popup.shseat = NULL;
+			if (prev) {
+				wl_list_init(&prev->popup.grab_link);
+			}
+			prev = shsurf;
+		}
+		wl_list_init(&prev->popup.grab_link);
+		wl_list_init(&shseat->popup_grab.surfaces_list);
+	}
+}
+
+
+}
 

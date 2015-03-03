@@ -790,9 +790,6 @@ void shell_surface::shell_surface_set_output(struct weston_output *output)
 		this->output = get_default_output(es->compositor);
 }
 
-page::shell_seat *get_shell_seat(weston_seat *seat);
-
-
 void shell_surface::set_popup(
           struct weston_surface *parent,
           struct weston_seat *seat,
@@ -802,7 +799,7 @@ void shell_surface::set_popup(
 {
 	assert(parent != NULL);
 
-	this->popup.shseat = get_shell_seat(seat);
+	this->popup.shseat = shell_seat::get_shell_seat(seat);
 	this->popup.serial = serial;
 	this->popup.x = x;
 	this->popup.y = y;
@@ -830,5 +827,18 @@ bool shell_surface::shell_surface_is_xdg_popup()
 	return wl_resource_instance_of(this->resource,
 				       &xdg_popup_interface,
 				       &xdg_popup_implementation);
+}
+
+
+void shell_surface::shell_surface_lose_keyboard_focus()
+{
+	if (--this->focus_count == 0)
+		this->shell_surface_state_changed();
+}
+
+void shell_surface::shell_surface_gain_keyboard_focus()
+{
+	if (this->focus_count++ == 0)
+		this->shell_surface_state_changed();
 }
 

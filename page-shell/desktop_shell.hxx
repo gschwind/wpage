@@ -14,6 +14,13 @@
 
 #include "exposay.hxx"
 #include "focus_state.hxx"
+#include "utils.hxx"
+
+#define DEFAULT_NUM_WORKSPACES 1
+#define DEFAULT_WORKSPACE_CHANGE_ANIMATION_LENGTH 200
+
+typedef void (*shell_for_each_layer_func_t)(struct desktop_shell *,
+					    struct weston_layer *, void *);
 
 enum animation_type {
 	ANIMATION_NONE,
@@ -28,16 +35,17 @@ enum fade_type {
 	FADE_OUT
 };
 
+using namespace page;
 
 struct desktop_shell {
 	struct weston_compositor *compositor;
 
-	struct wl_listener idle_listener;
-	struct wl_listener wake_listener;
-	struct wl_listener destroy_listener;
-	struct wl_listener show_input_panel_listener;
-	struct wl_listener hide_input_panel_listener;
-	struct wl_listener update_input_panel_listener;
+	cxx_wl_listener<desktop_shell> idle_listener;
+	cxx_wl_listener<desktop_shell> wake_listener;
+	cxx_wl_listener<desktop_shell> destroy_listener;
+	wl_listener show_input_panel_listener;
+	wl_listener hide_input_panel_listener;
+	wl_listener update_input_panel_listener;
 
 	struct weston_layer fullscreen_layer;
 	struct weston_layer panel_layer;
@@ -45,13 +53,13 @@ struct desktop_shell {
 	struct weston_layer lock_layer;
 	struct weston_layer input_panel_layer;
 
-	struct wl_listener pointer_focus_listener;
+	cxx_wl_listener<desktop_shell> pointer_focus_listener;
 	struct weston_surface *grab_surface;
 
 	struct {
 		struct wl_client *client;
 		struct wl_resource *desktop_shell;
-		struct wl_listener client_destroy_listener;
+		cxx_wl_listener<::desktop_shell> client_destroy_listener;
 
 		unsigned deathcount;
 		uint32_t deathstamp;
@@ -116,9 +124,9 @@ struct desktop_shell {
 
 	struct weston_layer minimized_layer;
 
-	struct wl_listener seat_create_listener;
-	struct wl_listener output_create_listener;
-	struct wl_listener output_move_listener;
+	cxx_wl_listener<desktop_shell, struct weston_seat> seat_create_listener;
+	cxx_wl_listener<desktop_shell, struct weston_output> output_create_listener;
+	cxx_wl_listener<desktop_shell, void> output_move_listener;
 	struct wl_list output_list;
 
 	enum desktop_shell_panel_position panel_position;
@@ -126,6 +134,9 @@ struct desktop_shell {
 	char *client;
 
 	struct timespec startup_time;
+
+	desktop_shell(struct weston_compositor *ec, int *argc, char *argv[]);
+	~desktop_shell();
 
 	void get_output_work_area(struct weston_output *output, pixman_rectangle32_t *area);
 	void get_output_panel_size(struct weston_output *output, int *width, int *height);
@@ -151,6 +162,70 @@ struct desktop_shell {
 
 	void shell_fade_startup();
 	static void do_shell_fade_startup(void *data);
+
+	void shell_configuration();
+	void shell_destroy();
+	void idle_handler();
+	void wake_handler();
+
+	static void bind_shell(wl_client *client, desktop_shell * shell, uint32_t version, uint32_t id);
+	static void bind_xdg_shell(struct wl_client *client, void *data, uint32_t version, uint32_t id);
+	static void bind_desktop_shell(struct wl_client *client, void *data, uint32_t version, uint32_t id);
+	static void bind_screensaver(struct wl_client *client, void *data, uint32_t version, uint32_t id);
+	static void bind_workspace_manager(struct wl_client *client, void *data, uint32_t version, uint32_t id);
+
+	static void launch_desktop_shell_process(void *data);
+	static int screensaver_timeout(void *data);
+
+	void handle_seat_created(struct weston_seat * data);
+
+	void shell_fade_init();
+	static int fade_startup_timeout(desktop_shell *);
+	void shell_add_bindings(struct weston_compositor *ec);
+
+	static void unbind_desktop_shell(struct wl_resource *resource);
+	static void unbind_screensaver(struct wl_resource *resource);
+	static void unbind_resource(struct wl_resource *resource);
+
+	static void zoom_axis_binding(struct weston_seat *seat, uint32_t time, uint32_t axis, wl_fixed_t value, void *data);
+	static void zoom_key_binding(struct weston_seat *seat, uint32_t time, uint32_t key, void *data);
+	static void terminate_binding(struct weston_seat *seat, uint32_t time, uint32_t key, void *data);
+	static void rotate_binding(struct weston_seat *seat, uint32_t time, uint32_t button, void *data);
+
+	static void activate_binding(struct weston_seat *seat, struct desktop_shell *shell, struct weston_surface *focus);
+	static void click_to_activate_binding(struct weston_seat *seat, uint32_t time, uint32_t button, void *data);
+	static void touch_to_activate_binding(struct weston_seat *seat, uint32_t time, void *data);
+
+
+	static void move_binding(struct weston_seat *seat, uint32_t time, uint32_t button, void *data);
+	static void maximize_binding(struct weston_seat *seat, uint32_t time, uint32_t button, void *data);
+	static void fullscreen_binding(struct weston_seat *seat, uint32_t time, uint32_t button, void *data);
+	static void touch_move_binding(struct weston_seat *seat, uint32_t time, void *data);
+	static void resize_binding(struct weston_seat *seat, uint32_t time, uint32_t button, void *data);
+
+//	static void debug_binding(struct weston_seat *seat, uint32_t time, uint32_t key, void *data);
+//	static void force_kill_binding(struct weston_seat *seat, uint32_t time, uint32_t key, void *data);
+//	static void workspace_up_binding(struct weston_seat *seat, uint32_t time, uint32_t key, void *data);
+//	static void workspace_down_binding(struct weston_seat *seat, uint32_t time, uint32_t key, void *data);
+//	static void workspace_f_binding(struct weston_seat *seat, uint32_t time, uint32_t key, void *data);
+//	static void workspace_move_surface_up_binding(struct weston_seat *seat, uint32_t time, uint32_t key, void *data);
+//	static void workspace_move_surface_down_binding(struct weston_seat *seat, uint32_t time, uint32_t key, void *data);
+
+	void desktop_shell_client_destroy();
+
+	bool check_desktop_shell_crash_too_early();
+	void respawn_desktop_shell_process();
+
+	static void surface_opacity_binding(struct weston_seat *seat, uint32_t time, uint32_t axis,
+				wl_fixed_t value, void *data);
+
+	void handle_output_create(struct weston_output *data);
+
+	void setup_output_destroy_handler(struct weston_compositor *ec);
+	void create_shell_output(struct weston_output *output);
+
+	void shell_for_each_layer(shell_for_each_layer_func_t func, void *data);
+	void handle_output_move(void *data);
 
 };
 

@@ -18,7 +18,10 @@ shell_seat::shell_seat(struct weston_seat *seat) :
 seat_destroy_listener{this, &shell_seat::destroy_shell_seat},
 keyboard_focus_listener{this, &shell_seat::handle_keyboard_focus},
 pointer_focus_listener{this, &shell_seat::handle_pointer_focus},
-caps_changed_listener{this, &shell_seat::shell_seat_caps_changed}
+caps_changed_listener{this, &shell_seat::shell_seat_caps_changed},
+seat{nullptr},
+focused_surface{nullptr},
+popup_grab{0}
 {
 
 	this->seat = seat;

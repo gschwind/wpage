@@ -160,8 +160,16 @@ struct shell_surface {
 
 	void shell_surface_lose_keyboard_focus();
 	void shell_surface_gain_keyboard_focus();
+	void shell_map_fullscreen();
+	void shell_configure_fullscreen();
+	void shell_ensure_fullscreen_black_view();
+	void shell_map_popup();
+	void add_popup_grab(page::shell_seat *shseat, int32_t type);
+	void remove_popup_grab2();
 
 };
+
+void black_surface_configure(struct weston_surface *es, int32_t sx, int32_t sy);
 
 
 #endif /* PAGE_SHELL_SURFACE_HXX_ */

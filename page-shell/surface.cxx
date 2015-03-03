@@ -155,7 +155,7 @@ shell_surface::shell_surface_configure(struct weston_surface *es, int32_t sx, in
 	}
 
 	if (!weston_surface_is_mapped(es)) {
-		map(shell, shsurf, sx, sy);
+		shell->map(shsurf, sx, sy);
 	} else if (type_changed || sx != 0 || sy != 0 ||
 		   shsurf->last_width != es->width ||
 		   shsurf->last_height != es->height) {
@@ -177,7 +177,7 @@ shell_surface::shell_surface_configure(struct weston_surface *es, int32_t sx, in
 
 		weston_view_to_global_float(shsurf->view, 0, 0, &from_x, &from_y);
 		weston_view_to_global_float(shsurf->view, sx, sy, &to_x, &to_y);
-		configure(shell, es,
+		shell->configure(es,
 			  shsurf->view->geometry.x + to_x - from_x,
 			  shsurf->view->geometry.y + to_y - from_y);
 	}
@@ -658,8 +658,8 @@ void shell_surface::send_configure_for_surface()
 		width = area.width;
 		height = area.height;
 	} else {
-		width = 157;
-		height = 277;
+		//width = 157;
+		//height = 277;
 	}
 
 	this->client->send_configure(this->surface, width, height);
@@ -841,4 +841,238 @@ void shell_surface::shell_surface_gain_keyboard_focus()
 	if (this->focus_count++ == 0)
 		this->shell_surface_state_changed();
 }
+
+
+void shell_surface::shell_map_fullscreen()
+{
+	shell_configure_fullscreen();
+}
+
+/* Create black surface and append it to the associated fullscreen surface.
+ * Handle size dismatch and positioning according to the method. */
+void shell_surface::shell_configure_fullscreen()
+{
+	struct weston_output *output = this->fullscreen_output;
+	struct weston_surface *surface = this->surface;
+	struct weston_matrix *matrix;
+	float scale, output_aspect, surface_aspect, x, y;
+	int32_t surf_x, surf_y, surf_width, surf_height;
+
+	if (this->fullscreen.type != WL_SHELL_SURFACE_FULLSCREEN_METHOD_DRIVER)
+		restore_output_mode(output);
+
+	/* Reverse the effect of lower_fullscreen_layer() */
+	weston_layer_entry_remove(&this->view->layer_link);
+	weston_layer_entry_insert(&this->shell->fullscreen_layer.view_list, &this->view->layer_link);
+
+	this->shell_ensure_fullscreen_black_view();
+
+	surface_subsurfaces_boundingbox(this->surface, &surf_x, &surf_y,
+	                                &surf_width, &surf_height);
+
+	switch (this->fullscreen.type) {
+	case WL_SHELL_SURFACE_FULLSCREEN_METHOD_DEFAULT:
+		if (surface->buffer_ref.buffer)
+			center_on_output(this->view, this->fullscreen_output);
+		break;
+	case WL_SHELL_SURFACE_FULLSCREEN_METHOD_SCALE:
+		/* 1:1 mapping between surface and output dimensions */
+		if (output->width == surf_width &&
+			output->height == surf_height) {
+			weston_view_set_position(this->view,
+						 output->x - surf_x,
+						 output->y - surf_y);
+			break;
+		}
+
+		matrix = &this->fullscreen.transform.matrix;
+		weston_matrix_init(matrix);
+
+		output_aspect = (float) output->width /
+			(float) output->height;
+		/* XXX: Use surf_width and surf_height here? */
+		surface_aspect = (float) surface->width /
+			(float) surface->height;
+		if (output_aspect < surface_aspect)
+			scale = (float) output->width /
+				(float) surf_width;
+		else
+			scale = (float) output->height /
+				(float) surf_height;
+
+		weston_matrix_scale(matrix, scale, scale, 1);
+		wl_list_remove(&this->fullscreen.transform.link);
+		wl_list_insert(&this->view->geometry.transformation_list,
+			       &this->fullscreen.transform.link);
+		x = output->x + (output->width - surf_width * scale) / 2 - surf_x;
+		y = output->y + (output->height - surf_height * scale) / 2 - surf_y;
+		weston_view_set_position(this->view, x, y);
+
+		break;
+	case WL_SHELL_SURFACE_FULLSCREEN_METHOD_DRIVER:
+		if (this->shell_surface_is_top_fullscreen()) {
+			struct weston_mode mode = {0,
+				surf_width * surface->buffer_viewport.buffer.scale,
+				surf_height * surface->buffer_viewport.buffer.scale,
+				this->fullscreen.framerate};
+
+			if (weston_output_switch_mode(output, &mode, surface->buffer_viewport.buffer.scale,
+					WESTON_MODE_SWITCH_SET_TEMPORARY) == 0) {
+				weston_view_set_position(this->view,
+							 output->x - surf_x,
+							 output->y - surf_y);
+				this->fullscreen.black_view->surface->width = output->width;
+				this->fullscreen.black_view->surface->height = output->height;
+				weston_view_set_position(this->fullscreen.black_view,
+							 output->x - surf_x,
+							 output->y - surf_y);
+				break;
+			} else {
+				restore_output_mode(output);
+				center_on_output(this->view, output);
+			}
+		}
+		break;
+	case WL_SHELL_SURFACE_FULLSCREEN_METHOD_FILL:
+		center_on_output(this->view, output);
+		break;
+	default:
+		break;
+	}
+}
+
+/* no-op func for checking black surface */
+void black_surface_configure(struct weston_surface *es, int32_t sx, int32_t sy) { }
+
+static struct weston_view *
+create_black_surface(struct weston_compositor *ec,
+		     struct weston_surface *fs_surface,
+		     float x, float y, int w, int h)
+{
+	struct weston_surface *surface = NULL;
+	struct weston_view *view;
+
+	surface = weston_surface_create(ec);
+	if (surface == NULL) {
+		weston_log("no memory\n");
+		return NULL;
+	}
+	view = weston_view_create(surface);
+	if (surface == NULL) {
+		weston_log("no memory\n");
+		weston_surface_destroy(surface);
+		return NULL;
+	}
+
+	surface->configure = ::black_surface_configure;
+	surface->configure_private = fs_surface;
+	weston_surface_set_color(surface, 0.0, 0.0, 0.0, 1);
+	pixman_region32_fini(&surface->opaque);
+	pixman_region32_init_rect(&surface->opaque, 0, 0, w, h);
+	pixman_region32_fini(&surface->input);
+	pixman_region32_init_rect(&surface->input, 0, 0, w, h);
+
+	weston_surface_set_size(surface, w, h);
+	weston_view_set_position(view, x, y);
+
+	return view;
+}
+
+void shell_surface::shell_ensure_fullscreen_black_view()
+{
+	struct weston_output *output = this->fullscreen_output;
+
+	assert(this->state.fullscreen);
+
+	if (!this->fullscreen.black_view)
+		this->fullscreen.black_view =
+			create_black_surface(this->surface->compositor,
+			                     this->surface,
+			                     output->x, output->y,
+			                     output->width,
+			                     output->height);
+
+	weston_view_geometry_dirty(this->fullscreen.black_view);
+	weston_layer_entry_remove(&this->fullscreen.black_view->layer_link);
+	weston_layer_entry_insert(&this->view->layer_link,
+				  &this->fullscreen.black_view->layer_link);
+	weston_view_geometry_dirty(this->fullscreen.black_view);
+	weston_surface_damage(this->surface);
+
+	this->state.lowered = false;
+}
+
+void shell_surface::shell_map_popup()
+{
+	page::shell_seat *shseat = this->popup.shseat;
+	struct weston_view *parent_view = get_default_view(this->parent);
+
+	this->surface->output = parent_view->output;
+	this->view->output = parent_view->output;
+
+	weston_view_set_transform_parent(this->view, parent_view);
+	weston_view_set_position(this->view, this->popup.x, this->popup.y);
+	weston_view_update_transform(this->view);
+
+	if (shseat->seat->pointer &&
+	    shseat->seat->pointer->grab_serial == this->popup.serial) {
+		this->add_popup_grab(shseat, page::shell_seat::POINTER);
+	} else if (shseat->seat->touch &&
+	           shseat->seat->touch->grab_serial == this->popup.serial) {
+		this->add_popup_grab(shseat, page::shell_seat::TOUCH);
+	} else {
+		shell_surface_send_popup_done(this);
+		shseat->popup_grab.client = NULL;
+	}
+}
+
+
+void shell_surface::add_popup_grab(page::shell_seat *shseat, int32_t type)
+{
+	struct weston_seat *seat = shseat->seat;
+
+	if (wl_list_empty(&shseat->popup_grab.surfaces_list)) {
+		shseat->popup_grab.type = type;
+		shseat->popup_grab.client = wl_resource_get_client(this->resource);
+
+		if (type == page::shell_seat::POINTER) {
+			shseat->popup_grab.grab.interface = &popup_grab_interface;
+			/* We must make sure here that this popup was opened after
+			 * a mouse press, and not just by moving around with other
+			 * popups already open. */
+			if (shseat->seat->pointer->button_count > 0)
+				shseat->popup_grab.initial_up = 0;
+		} else if (type == page::shell_seat::TOUCH) {
+			shseat->popup_grab.touch_grab.interface = &touch_popup_grab_interface;
+		}
+
+		wl_list_insert(&shseat->popup_grab.surfaces_list, &this->popup.grab_link);
+
+		if (type == page::shell_seat::POINTER)
+			weston_pointer_start_grab(seat->pointer, &shseat->popup_grab.grab);
+		else if (type == page::shell_seat::TOUCH)
+			weston_touch_start_grab(seat->touch, &shseat->popup_grab.touch_grab);
+	} else {
+		wl_list_insert(&shseat->popup_grab.surfaces_list, &this->popup.grab_link);
+	}
+}
+
+void shell_surface::remove_popup_grab2()
+{
+	page::shell_seat *shseat = this->popup.shseat;
+
+	wl_list_remove(&this->popup.grab_link);
+	wl_list_init(&this->popup.grab_link);
+	if (wl_list_empty(&shseat->popup_grab.surfaces_list)) {
+		if (shseat->popup_grab.type == page::shell_seat::POINTER) {
+			weston_pointer_end_grab(shseat->popup_grab.grab.pointer);
+			shseat->popup_grab.grab.interface = NULL;
+		} else if (shseat->popup_grab.type == page::shell_seat::TOUCH) {
+			weston_touch_end_grab(shseat->popup_grab.touch_grab.touch);
+			shseat->popup_grab.touch_grab.interface = NULL;
+		}
+	}
+}
+
+
 

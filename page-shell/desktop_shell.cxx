@@ -1572,6 +1572,135 @@ desktop_shell::shell_for_each_layer(shell_for_each_layer_func_t func, void *data
 		func(this, &(*ws)->layer, data);
 }
 
+
+void desktop_shell::map(shell_surface *shsurf, int32_t sx, int32_t sy)
+{
+	struct weston_compositor *compositor = this->compositor;
+	struct weston_seat *seat;
+
+	/* initial positioning, see also configure() */
+	switch (shsurf->type) {
+	case SHELL_SURFACE_TOPLEVEL:
+		if (shsurf->state.fullscreen) {
+			center_on_output(shsurf->view, shsurf->fullscreen_output);
+			shsurf->shell_map_fullscreen();
+		} else if (shsurf->state.maximized) {
+			this->set_maximized_position(shsurf);
+		} else if (!shsurf->state.relative) {
+
+			weston_matrix_init(&(shsurf->rotation.transform.matrix));
+			//weston_matrix_scale(&(shsurf->rotation.transform.matrix),0.5,0.5,0.5);
+			wl_list_insert(&shsurf->view->geometry.transformation_list, &(shsurf->rotation.transform.link));
+
+			weston_view_set_initial_position(shsurf->view, this);
+		}
+		break;
+	case SHELL_SURFACE_POPUP:
+		shsurf->shell_map_popup();
+		break;
+	case SHELL_SURFACE_NONE:
+		weston_view_set_position(shsurf->view,
+					 shsurf->view->geometry.x + sx,
+					 shsurf->view->geometry.y + sy);
+		break;
+	case SHELL_SURFACE_XWAYLAND:
+	default:
+		;
+	}
+
+	/* Surface stacking order, see also activate(). */
+	shsurf->shell_surface_update_layer();
+
+	if (shsurf->type != SHELL_SURFACE_NONE) {
+		weston_view_update_transform(shsurf->view);
+		if (shsurf->state.maximized) {
+			shsurf->surface->output = shsurf->output;
+			shsurf->view->output = shsurf->output;
+		}
+	}
+
+	switch (shsurf->type) {
+	/* XXX: xwayland's using the same fields for transient type */
+	case SHELL_SURFACE_XWAYLAND:
+		if (shsurf->transient.flags ==
+				WL_SHELL_SURFACE_TRANSIENT_INACTIVE)
+			break;
+	case SHELL_SURFACE_TOPLEVEL:
+		if (shsurf->state.relative &&
+		    shsurf->transient.flags == WL_SHELL_SURFACE_TRANSIENT_INACTIVE)
+			break;
+		if (this->locked)
+			break;
+		wl_list_for_each(seat, &compositor->seat_list, link)
+			page::activate(this, shsurf->surface, seat, true);
+		break;
+	case SHELL_SURFACE_POPUP:
+	case SHELL_SURFACE_NONE:
+	default:
+		break;
+	}
+
+	if (shsurf->type == SHELL_SURFACE_TOPLEVEL &&
+	    !shsurf->state.maximized && !shsurf->state.fullscreen)
+	{
+		switch (this->win_animation_type) {
+		case ANIMATION_FADE:
+			weston_fade_run(shsurf->view, 0.0, 1.0, 300.0, NULL, NULL);
+			break;
+		case ANIMATION_ZOOM:
+			weston_zoom_run(shsurf->view, 0.5, 1.0, NULL, NULL);
+			break;
+		case ANIMATION_NONE:
+		default:
+			break;
+		}
+	}
+}
+
+void desktop_shell::configure(struct weston_surface *surface, float x, float y)
+{
+	shell_surface *shsurf;
+	struct weston_view *view;
+
+	shsurf = shell_surface::get_shell_surface(surface);
+
+	assert(shsurf);
+
+	if (shsurf->state.fullscreen)
+		shsurf->shell_configure_fullscreen();
+	else if (shsurf->state.maximized) {
+		this->set_maximized_position(shsurf);
+	} else {
+		weston_view_set_position(shsurf->view, x, y);
+	}
+
+	/* XXX: would a fullscreen surface need the same handling? */
+	if (surface->output) {
+		wl_list_for_each(view, &surface->views, surface_link)
+			weston_view_update_transform(view);
+
+		if (shsurf->state.maximized)
+			surface->output = shsurf->output;
+	}
+}
+
+
+void desktop_shell::set_maximized_position(shell_surface *shsurf)
+{
+	int32_t surf_x, surf_y;
+	pixman_rectangle32_t area;
+	pixman_box32_t *e;
+
+	this->get_output_work_area(shsurf->output, &area);
+	surface_subsurfaces_boundingbox(shsurf->surface,
+					&surf_x, &surf_y, NULL, NULL);
+	e = pixman_region32_extents(&shsurf->output->region);
+
+	weston_view_set_position(shsurf->view,
+				 e->x1 + area.x - surf_x,
+				 e->y1 + area.y - surf_y);
+}
+
 //
 //static void
 //desktop_shell::debug_binding(struct weston_seat *seat, uint32_t time, uint32_t key, void *data)
@@ -1694,3 +1823,7 @@ desktop_shell::shell_for_each_layer(shell_for_each_layer_func_t func, void *data
 //}
 //
 //
+
+
+
+

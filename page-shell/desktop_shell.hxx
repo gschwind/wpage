@@ -227,6 +227,10 @@ struct desktop_shell {
 	void shell_for_each_layer(shell_for_each_layer_func_t func, void *data);
 	void handle_output_move(void *data);
 
+	void map(shell_surface *shsurf, int32_t sx, int32_t sy);
+	void configure(struct weston_surface *surface, float x, float y);
+	void set_maximized_position(shell_surface *shsurf);
+
 };
 
 

@@ -78,11 +78,15 @@ struct desktop_shell {
 	struct wl_listener lock_surface_listener;
 
 	struct {
-		struct wl_array array;
+		/* array of workspaces */
+		std::vector<workspace*> array;
+		/* current workspace id */
 		unsigned int current;
+		/* size of array */
 		unsigned int num;
 
-		struct wl_list client_list;
+		/* list of resources that handle server-to-client workspace protocol */
+		std::list<wl_resource*> client_list;
 
 		struct weston_animation animation;
 		struct wl_list anim_sticky_list;
@@ -230,6 +234,8 @@ struct desktop_shell {
 	void map(shell_surface *shsurf, int32_t sx, int32_t sy);
 	void configure(struct weston_surface *surface, float x, float y);
 	void set_maximized_position(shell_surface *shsurf);
+	void broadcast_current_workspace_state();
+	void reverse_workspace_change_animation(unsigned int index, workspace *from, workspace *to);
 
 };
 

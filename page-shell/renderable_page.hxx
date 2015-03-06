@@ -13,7 +13,6 @@
 
 #include <memory>
 
-#include "display.hxx"
 #include "theme.hxx"
 
 #include "region.hxx"
@@ -25,7 +24,6 @@ namespace page {
  * renderable_page is responsible to render page background (i.e. notebooks and background image)
  **/
 class renderable_page_t {
-	display_t * _cnx;
 	theme_t * _theme;
 	region _damaged;
 
@@ -45,71 +43,24 @@ class renderable_page_t {
 
 public:
 
-	renderable_page_t(display_t * cnx, theme_t * theme, int width,
+	renderable_page_t(theme_t * theme, int width,
 			int height) {
 		_theme = theme;
 		_is_durty = true;
 		_is_visible = true;
 		_has_alpha = false;
 
-		_cnx = cnx;
-
-		_win = xcb_generate_id(cnx->xcb());
-
-		xcb_visualid_t visual = _cnx->root_visual()->visual_id;
-		int depth = _cnx->root_depth();
-
-		/** if visual is 32 bits, this values are mandatory **/
-		xcb_colormap_t cmap = xcb_generate_id(_cnx->xcb());
-		xcb_create_colormap(_cnx->xcb(), XCB_COLORMAP_ALLOC_NONE, cmap, _cnx->root(), visual);
-
-		uint32_t value_mask = 0;
-		uint32_t value[5];
-
-		value_mask |= XCB_CW_BACK_PIXEL;
-		value[0] = _cnx->xcb_screen()->black_pixel;
-
-		value_mask |= XCB_CW_BORDER_PIXEL;
-		value[1] = _cnx->xcb_screen()->black_pixel;
-
-		value_mask |= XCB_CW_OVERRIDE_REDIRECT;
-		value[2] = True;
-
-		value_mask |= XCB_CW_EVENT_MASK;
-		value[3] = XCB_EVENT_MASK_EXPOSURE;
-
-		value_mask |= XCB_CW_COLORMAP;
-		value[4] = cmap;
-
-		_win = xcb_generate_id(_cnx->xcb());
-		xcb_create_window(_cnx->xcb(), depth, _win, _cnx->root(), 0, 0, width, height, 0, XCB_WINDOW_CLASS_INPUT_OUTPUT, visual, value_mask, value);
-		_cnx->map(_win);
-
-		_pix = XCB_NONE;
-		_position = i_rect{0, 0, width, height};
-
-		update_renderable();
+		// TODO: create the background surface.
 
 	}
 
 	void update_renderable() {
-		if(_pix != XCB_NONE)
-			xcb_free_pixmap(_cnx->xcb(), _pix);
-		_pix = xcb_generate_id(_cnx->xcb());
-		xcb_create_pixmap(_cnx->xcb(), _cnx->root_depth(), _pix, _win, _position.w, _position.h);
-
-		if(_back_surf != nullptr) {
-			cairo_surface_destroy(_back_surf);
-			_back_surf = nullptr;
-		}
-		_back_surf = cairo_xcb_surface_create(_cnx->xcb(), _pix, _cnx->root_visual(), _position.w, _position.h);
-		_renderable = std::shared_ptr<renderable_surface_t>{new renderable_surface_t{_back_surf, _position}};
+		// update back surf ?
 	}
 
 	~renderable_page_t() {
 		cout << "call " << __FUNCTION__ << endl;
 		cairo_surface_destroy(_back_surf);
-		xcb_free_pixmap(_cnx->xcb(), _pix);
 	}
 
 	bool repair_damaged(std::vector<tree_t *> tree) {
@@ -172,16 +123,11 @@ public:
 	}
 
 	void move_resize(i_rect const & area) {
-		_position = area;
-		_cnx->move_resize(_win, _position);
-		update_renderable();
+		// TODO
 	}
 
 	void move(int x, int y) {
-		_position.x = x;
-		_position.y = y;
-		_cnx->move_resize(_win, _position);
-		update_renderable();
+		// TODO
 	}
 
 	void show() {
@@ -213,7 +159,7 @@ public:
 	}
 
 	void expose(region const & r) {
-		cairo_surface_t * surf = cairo_xcb_surface_create(_cnx->xcb(), _win, _cnx->root_visual(), _position.w, _position.h);
+		cairo_surface_t * surf = nullptr; //TODO
 		cairo_t * cr = cairo_create(surf);
 		for(auto a: r) {
 			cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);

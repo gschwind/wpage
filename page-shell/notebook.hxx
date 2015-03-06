@@ -17,7 +17,6 @@
 
 #include "theme.hxx"
 #include "pixmap.hxx"
-#include "composite_surface.hxx"
 #include "renderable_notebook_fading.hxx"
 #include "page_event.hxx"
 #include "renderable_notebook_fading.hxx"

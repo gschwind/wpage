@@ -90,7 +90,6 @@ page_t::page_t(int argc, char ** argv)
 
 
 	identity_window = XCB_NONE;
-	cmgr = nullptr;
 
 	/** initialize the empty desktop **/
 	_current_desktop = 0;
@@ -126,9 +125,6 @@ page_t::page_t(int argc, char ** argv)
 
 	keymap = nullptr;
 	process_mode = PROCESS_NORMAL;
-
-	cnx = new display_t;
-	rnd = nullptr;
 
 	running = false;
 
@@ -220,8 +216,6 @@ page_t::page_t(int argc, char ** argv)
 
 page_t::~page_t() {
 
-	cnx->unload_cursors();
-
 	pfm.reset();
 	pn0.reset();
 	ps.reset();
@@ -241,7 +235,6 @@ page_t::~page_t() {
 	}
 
 	delete theme;
-	delete rnd;
 	delete keymap;
 
 	// cleanup cairo, for valgrind happiness.
@@ -492,60 +485,6 @@ void page_t::unmanage(client_managed_t * mw) {
 
 void page_t::scan() {
 
-	cnx->grab();
-	cnx->fetch_pending_events();
-
-	xcb_query_tree_cookie_t ck = xcb_query_tree(cnx->xcb(), cnx->root());
-	xcb_query_tree_reply_t * r = xcb_query_tree_reply(cnx->xcb(), ck, 0);
-
-	if(r == nullptr)
-		throw exception_t("Cannot query tree");
-
-	xcb_window_t * children = xcb_query_tree_children(r);
-	unsigned n_children = xcb_query_tree_children_length(r);
-
-	for (unsigned i = 0; i < n_children; ++i) {
-		xcb_window_t w = children[i];
-
-		std::shared_ptr<client_properties_t> c{new client_properties_t(cnx, w)};
-		if (!c->read_window_attributes()) {
-			continue;
-		}
-
-		if(c->wa()->_class == XCB_WINDOW_CLASS_INPUT_ONLY) {
-			continue;
-		}
-
-		c->read_all_properties();
-
-		if (c->wa()->map_state != XCB_MAP_STATE_UNMAPPED) {
-			onmap(w);
-		} else {
-			/**
-			 * if the window is not mapped, check if previous windows manager has set WM_STATE to iconic
-			 * if this is the case, that mean that is a managed window, otherwise it is a WithDrwn window
-			 **/
-			if (c->wm_state() != nullptr) {
-				if (c->wm_state()->state == IconicState) {
-					onmap(w);
-				}
-			}
-		}
-	}
-
-	free(r);
-
-	_need_update_client_list = true;
-	update_workarea();
-	for(auto x: _desktop_list) {
-		reconfigure_docks(x);
-	}
-	_need_restack = true;
-
-	cnx->ungrab();
-
-	print_state();
-
 }
 
 void page_t::update_net_supported() {
@@ -610,23 +549,6 @@ void page_t::update_net_supported() {
 
 void page_t::update_client_list() {
 
-	/** set _NET_CLIENT_LIST : client list from oldest to newer client **/
-	std::vector<xcb_window_t> client_list;
-	for(auto c: _clients_list) {
-		client_list.push_back(c->orig());
-	}
-
-	cnx->change_property(cnx->root(), _NET_CLIENT_LIST, WINDOW, 32,
-			&client_list[0], client_list.size());
-
-	/** set _NET_CLIENT_LIST_STACKING : bottom to top staking **/
-	auto client_managed_list_stack = filter_class<client_managed_t>(tree_t::get_all_children());
-	std::vector<xcb_window_t> client_list_stack;
-	for(auto c: client_managed_list_stack) {
-		client_list_stack.push_back(c->orig());
-	}
-	cnx->change_property(cnx->root(), _NET_CLIENT_LIST_STACKING,
-			WINDOW, 32, &client_list_stack[0], client_list_stack.size());
 
 }
 
@@ -2984,10 +2906,6 @@ void page_t::update_windows_stack() {
 	if(pn0 != nullptr)
 		stack.push_back(pn0->id());
 
-	/** place overlay on top **/
-	if (rnd != nullptr)
-		stack.push_back(rnd->get_composite_overlay());
-
 	for (auto i : clients) {
 		stack.push_back(i->base());
 	}
@@ -3032,149 +2950,11 @@ void page_t::update_windows_stack() {
 }
 
 void page_t::update_viewport_layout() {
-
-	/** update root size infos **/
-	xcb_get_geometry_cookie_t ck0 = xcb_get_geometry(cnx->xcb(), cnx->root());
-	xcb_randr_get_screen_resources_cookie_t ck1 = xcb_randr_get_screen_resources(cnx->xcb(), cnx->root());
-
-	xcb_get_geometry_reply_t * geometry = xcb_get_geometry_reply(cnx->xcb(), ck0, nullptr);
-	xcb_randr_get_screen_resources_reply_t * randr_resources = xcb_randr_get_screen_resources_reply(cnx->xcb(), ck1, 0);
-
-	if(geometry == nullptr or randr_resources == nullptr) {
-		throw exception_t("FATAL: cannot read root window attributes");
-	}
-
-	_root_position = i_rect{geometry->x, geometry->y, geometry->width, geometry->height};
-	set_desktop_geometry(_root_position.w, _root_position.h);
-
-	xcb_randr_crtc_t primary;
-	std::map<xcb_randr_crtc_t, xcb_randr_get_crtc_info_reply_t *> crtc_info;
-
-	std::vector<xcb_randr_get_crtc_info_cookie_t> ckx(xcb_randr_get_screen_resources_crtcs_length(randr_resources));
-	xcb_randr_crtc_t * crtc_list = xcb_randr_get_screen_resources_crtcs(randr_resources);
-	for (unsigned k = 0; k < xcb_randr_get_screen_resources_crtcs_length(randr_resources); ++k) {
-		ckx[k] = xcb_randr_get_crtc_info(cnx->xcb(), crtc_list[k], XCB_CURRENT_TIME);
-	}
-
-	for (unsigned k = 0; k < xcb_randr_get_screen_resources_crtcs_length(randr_resources); ++k) {
-		xcb_randr_get_crtc_info_reply_t * r = xcb_randr_get_crtc_info_reply(cnx->xcb(), ckx[k], 0);
-		if(r != nullptr) {
-			crtc_info[crtc_list[k]] = r;
-		}
-	}
-
-	if(xcb_randr_get_screen_resources_crtcs_length(randr_resources) > 0) {
-		primary = crtc_list[0];
-	} else {
-		primary = 0;
-	}
-
-	for(auto d: _desktop_list) {
-		std::map<xcb_randr_crtc_t, viewport_t *> old_layout{d->get_viewport_map()};
-
-		/** store the newer layout, to be able to cleanup obsolete viewports **/
-		std::map<xcb_randr_crtc_t, viewport_t *> new_layout;
-		for(auto crtc: crtc_info) {
-			xcb_randr_get_crtc_info_reply_t * info = crtc.second;
-			if(info->num_outputs <= 0)
-				continue;
-
-			i_rect area{info->x, info->y, info->width, info->height};
-			/** if this crtc do not has a viewport **/
-			if (not has_key(old_layout, crtc.first)) {
-				/** then create a new one, and store it in new_layout **/
-				viewport_t * v = new viewport_t(cnx, theme, area);
-				v->set_parent(d);
-				new_layout[crtc.first] = v;
-			} else {
-				/** update allocation, and store it to new_layout **/
-				old_layout[crtc.first]->set_raw_area(area);
-				new_layout[crtc.first] = old_layout[crtc.first];
-			}
-			compute_viewport_allocation(d, new_layout[crtc.first]);
-			if(crtc.first == primary) {
-				d->set_primary_viewport(new_layout[crtc.first]);
-			}
-		}
-
-		if(new_layout.size() < 1) {
-			/** fallback to one screen **/
-			i_rect area{_root_position};
-			/** if this crtc do not has a viewport **/
-			if (not has_key<xcb_randr_crtc_t>(old_layout, XCB_NONE)) {
-				/** then create a new one, and store it in new_layout **/
-				viewport_t * v = new viewport_t(cnx, theme, area);
-				v->set_parent(d);
-				new_layout[XCB_NONE] = v;
-			} else {
-				/** update allocation, and store it to new_layout **/
-				old_layout[XCB_NONE]->set_raw_area(area);
-				new_layout[XCB_NONE] = old_layout[XCB_NONE];
-			}
-			compute_viewport_allocation(d, new_layout[XCB_NONE]);
-			d->set_primary_viewport(new_layout[XCB_NONE]);
-		}
-
-		d->set_layout(new_layout);
-		d->update_default_pop();
-
-		/** clean up obsolete layout **/
-		for (auto i: old_layout) {
-			if (not has_key(new_layout, i.first)) {
-				/** destroy this viewport **/
-				remove_viewport(d, i.second);
-				destroy_viewport(i.second);
-			}
-		}
-
-	}
-
-	for(auto i: crtc_info) {
-		if(i.second != nullptr)
-			free(i.second);
-	}
-
-	if(geometry != nullptr) {
-		free(geometry);
-	}
-
-	if(randr_resources != nullptr) {
-		free(randr_resources);
-	}
-
-	update_desktop_visibility();
-
-	/* set viewport */
-	std::vector<uint32_t> viewport(_desktop_list.size()*2);
-	std::fill_n(viewport.begin(), _desktop_list.size()*2, 0);
-	cnx->change_property(cnx->root(), _NET_DESKTOP_VIEWPORT,
-			CARDINAL, 32, &viewport[0], _desktop_list.size()*2);
-
-	/* define desktop geometry */
-	set_desktop_geometry(_root_position.w, _root_position.h);
-
-	update_workarea();
-	reconfigure_docks(_desktop_list[_current_desktop]);
-
+	// TODO
 }
 
 void page_t::remove_viewport(desktop_t * d, viewport_t * v) {
-
-	/* remove fullscreened clients if needed */
-	for (auto &x : _fullscreen_client_to_viewport) {
-		if (x.second.viewport == v) {
-			unfullscreen(x.first);
-			break;
-		}
-	}
-
-	/* Transfer clients to a valid notebook */
-	for (auto nbk : filter_class<notebook_t>(v->tree_t::get_all_children())) {
-		for (auto c : nbk->get_clients()) {
-			d->default_pop()->add_client(c, false);
-		}
-	}
-
+	// TODO
 }
 
 void page_t::destroy_viewport(viewport_t * v) {
@@ -3498,8 +3278,7 @@ void page_t::create_unmanaged_window(std::shared_ptr<client_properties_t> c, xcb
 }
 
 void page_t::create_dock_window(std::shared_ptr<client_properties_t> c, xcb_atom_t type) {
-	client_not_managed_t * uw = new client_not_managed_t(type, c, cmgr);
-	uw->map();
+	client_not_managed_t * uw = new client_not_managed_t(type, c);
 	attach_dock(uw);
 	safe_raise_window(uw);
 	update_workarea();

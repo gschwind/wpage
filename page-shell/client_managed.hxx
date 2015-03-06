@@ -18,11 +18,8 @@
 #include "icon_handler.hxx"
 #include "theme.hxx"
 
-#include "composite_surface_manager.hxx"
 #include "client_properties.hxx"
-
 #include "floating_event.hxx"
-#include "composite_surface.hxx"
 
 namespace page {
 
@@ -107,8 +104,6 @@ private:
 
 	std::vector<floating_event_t> * _floating_area;
 
-	composite_surface_manager_t * _cmgr;
-
 	bool _is_focused;
 	bool _motif_has_border;
 	bool _is_iconic;
@@ -117,7 +112,7 @@ private:
 public:
 
 	client_managed_t(xcb_atom_t net_wm_type, std::shared_ptr<client_properties_t> c,
-			theme_t const * theme, composite_surface_manager_t * cmgr);
+			theme_t const * theme, void * cmgr);
 	virtual ~client_managed_t();
 
 	void reconfigure();
@@ -164,9 +159,6 @@ public:
 		return _deco;
 	}
 
-	xcb_atom_t A(atom_e atom) {
-		return cnx()->A(atom);
-	}
 
 	void icccm_focus(xcb_timestamp_t t);
 
@@ -176,10 +168,6 @@ public:
 
 	bool motif_has_border() {
 		return _motif_has_border;
-	}
-
-	std::shared_ptr<pixmap_t> get_last_pixmap() {
-		return _cmgr->get_last_pixmap(_base);
 	}
 
 	void set_current_desktop(unsigned int n) {
@@ -237,7 +225,6 @@ public:
 	void set_opaque_region(xcb_window_t w, region & region);
 	bool has_window(xcb_window_t w) const;
 	virtual std::string get_node_name() const;
-	display_t * cnx();
 	virtual void prepare_render(std::vector<std::shared_ptr<renderable_t>> & out, page::time_t const & time);
 	std::shared_ptr<renderable_t> get_base_renderable();
 	virtual i_rect const & base_position() const;

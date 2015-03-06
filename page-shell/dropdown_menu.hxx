@@ -75,7 +75,6 @@ public:
 
 private:
 	theme_t * _theme;
-	display_t * _dpy;
 	std::vector<std::shared_ptr<item_t>> _items;
 	int _selected;
 
@@ -90,11 +89,10 @@ private:
 
 public:
 
-	dropdown_menu_t(display_t * cnx, theme_t * theme, std::vector<std::shared_ptr<item_t>> items, int x, int y, int width) : _theme(theme) {
+	dropdown_menu_t(theme_t * theme, std::vector<std::shared_ptr<item_t>> items, int x, int y, int width) : _theme(theme) {
 		_selected = -1;
 
 		_is_durty = true;
-		_dpy = cnx;
 
 		_items = items;
 		_position.x = x;
@@ -102,43 +100,11 @@ public:
 		_position.w = width;
 		_position.h = 24*_items.size();
 
-		xcb_colormap_t cmap = xcb_generate_id(_dpy->xcb());
-		xcb_create_colormap(_dpy->xcb(), XCB_COLORMAP_ALLOC_NONE, cmap, _dpy->root(), _dpy->root_visual()->visual_id);
 
-		uint32_t value_mask = 0;
-		uint32_t value[5];
-
-		value_mask |= XCB_CW_BACK_PIXEL;
-		value[0] = _dpy->xcb_screen()->black_pixel;
-
-		value_mask |= XCB_CW_BORDER_PIXEL;
-		value[1] = _dpy->xcb_screen()->black_pixel;
-
-		value_mask |= XCB_CW_OVERRIDE_REDIRECT;
-		value[2] = True;
-
-		value_mask |= XCB_CW_EVENT_MASK;
-		value[3] = XCB_EVENT_MASK_EXPOSURE;
-
-		value_mask |= XCB_CW_COLORMAP;
-		value[4] = cmap;
-
-		_wid = xcb_generate_id(_dpy->xcb());
-		xcb_create_window(_dpy->xcb(), _dpy->root_depth(), _wid, _dpy->root(), _position.x, _position.y, _position.w, _position.h, 0, XCB_WINDOW_CLASS_INPUT_OUTPUT, _dpy->root_visual()->visual_id, value_mask, value);
-
-
-		_pix = xcb_generate_id(_dpy->xcb());
-		xcb_create_pixmap(_dpy->xcb(), _dpy->root_depth(), _pix, _wid, _position.w, _position.h);
-		_surf = cairo_xcb_surface_create(_dpy->xcb(), _pix, _dpy->root_visual(), _position.w, _position.h);
-		update_backbuffer();
-
-		_dpy->map(_wid);
 	}
 
 	~dropdown_menu_t() {
 		cairo_surface_destroy(_surf);
-		xcb_free_pixmap(_dpy->xcb(), _pix);
-		xcb_destroy_window(_dpy->xcb(), _wid);
 	}
 
 	TDATA const & get_selected() {
@@ -195,7 +161,7 @@ public:
 	}
 
 	void expose(region const & r) {
-		cairo_surface_t * surf = cairo_xcb_surface_create(_dpy->xcb(), _wid, _dpy->root_visual(), _position.w, _position.h);
+		cairo_surface_t * surf = nullptr; //TODO
 		cairo_t * cr = cairo_create(surf);
 		for(auto a: r) {
 			cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);

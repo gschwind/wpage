@@ -704,6 +704,8 @@ page_shell_la_CPPFLAGS =			\
 	-std=c++11				\
 	-fpermissive				\
 	$(COMPOSITOR_CFLAGS)			\
+	$(CLIENT_CFLAGS)			\
+	$(PANGO_CFLAGS)				\
 	-I$(top_builddir)/protocol		\
 	-I$(top_srcdir)/shared			\
 	-I$(top_srcdir)/src			\
@@ -715,9 +717,10 @@ page_shell_la_CPPFLAGS =			\
 	-DIN_WESTON
 
 page_shell_la_LDFLAGS = -module -avoid-version
-page_shell_la_LIBADD = $(COMPOSITOR_LIBS) libshared.la
-page_shell_la_CFLAGS = $(GCC_CFLAGS) $(COMPOSITOR_CFLAGS)
+page_shell_la_LIBADD = $(COMPOSITOR_LIBS) $(CLIENT_LIBS) $(PANGO_LIBS) libshared.la
+page_shell_la_CFLAGS = $(GCC_CFLAGS) $(COMPOSITOR_CFLAGS) $(CLIENT_CFLAGS) $(PANGO_CFLAGS)
 page_shell_la_SOURCES =					\
+	page-shell/workspace.cxx				\
 	page-shell/client.cxx				\
 	page-shell/surface.cxx				\
 	page-shell/shell_seat.cxx			\

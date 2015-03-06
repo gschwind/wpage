@@ -9,21 +9,13 @@
 #ifndef PAGE_SHELL_FOCUS_STATE_HXX_
 #define PAGE_SHELL_FOCUS_STATE_HXX_
 
+#include "workspace.hxx"
+#include "exposay.hxx"
+
 struct focus_surface {
 	struct weston_surface *surface;
 	struct weston_view *view;
 	struct weston_transform workspace_transform;
-};
-
-struct workspace {
-	struct weston_layer layer;
-
-	struct wl_list focus_list;
-	struct wl_listener seat_destroyed_listener;
-
-	struct focus_surface *fsurf_front;
-	struct focus_surface *fsurf_back;
-	struct weston_view_animation *focus_animation;
 };
 
 struct shell_output {

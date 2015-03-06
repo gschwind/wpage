@@ -24,7 +24,6 @@
 #include "exception.hxx"
 
 #include "client_properties.hxx"
-#include "display.hxx"
 
 #include "tree.hxx"
 

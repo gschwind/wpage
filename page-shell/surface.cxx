@@ -118,6 +118,9 @@ surface_destroy_listener{this, &shell_surface::shell_handle_surface_destroy}
 
 }
 
+/**
+ * Call on surface commit.
+ */
 void
 shell_surface::shell_surface_configure(struct weston_surface *es, int32_t sx, int32_t sy)
 {

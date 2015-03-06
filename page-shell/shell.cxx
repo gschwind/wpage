@@ -207,7 +207,7 @@ create_focus_surface(struct weston_compositor *ec,
 	return fsurf;
 }
 
-static void
+void
 focus_surface_destroy(struct focus_surface *fsurf)
 {
 	weston_surface_destroy(fsurf->surface);
@@ -221,7 +221,7 @@ focus_animation_done(struct weston_view_animation *animation, void *data)
 	ws->focus_animation = nullptr;
 }
 
-static void
+void
 focus_state_destroy(struct focus_state *state)
 {
 	wl_list_remove(&state->seat_destroy_listener.link);
@@ -407,54 +407,21 @@ animate_focus_change(struct desktop_shell *shell, struct workspace *ws,
 	}
 }
 
-void
-workspace_destroy(struct workspace *ws)
-{
-	struct focus_state *state, *next;
+//static void
+//seat_destroyed(struct wl_listener *listener, void *data)
+//{
+//	 weston_seat *seat = data;
+//	 focus_state *state, *next;
+//	 workspace *ws = container_of(listener,
+//					    struct workspace,
+//					    seat_destroyed_listener);
+//
+//	wl_list_for_each_safe(state, next, &ws->focus_list, link)
+//		if (state->seat == seat)
+//			wl_list_remove(&state->link);
+//}
 
-	wl_list_for_each_safe(state, next, &ws->focus_list, link)
-		focus_state_destroy(state);
 
-	if (ws->fsurf_front)
-		focus_surface_destroy(ws->fsurf_front);
-	if (ws->fsurf_back)
-		focus_surface_destroy(ws->fsurf_back);
-
-	free(ws);
-}
-
-static void
-seat_destroyed(struct wl_listener *listener, void *data)
-{
-	 weston_seat *seat = data;
-	 focus_state *state, *next;
-	 workspace *ws = container_of(listener,
-					    struct workspace,
-					    seat_destroyed_listener);
-
-	wl_list_for_each_safe(state, next, &ws->focus_list, link)
-		if (state->seat == seat)
-			wl_list_remove(&state->link);
-}
-
-static  workspace *
-workspace_create(void)
-{
-	 workspace *ws = malloc(sizeof *ws);
-	if (ws == NULL)
-		return NULL;
-
-	weston_layer_init(&ws->layer, NULL);
-
-	wl_list_init(&ws->focus_list);
-	wl_list_init(&ws->seat_destroyed_listener.link);
-	ws->seat_destroyed_listener.notify = seat_destroyed;
-	ws->fsurf_front = NULL;
-	ws->fsurf_back = NULL;
-	ws->focus_animation = NULL;
-
-	return ws;
-}
 
 static int
 workspace_is_empty( workspace *ws)
@@ -543,34 +510,7 @@ workspace_translate_in(struct workspace *ws, double fraction)
 }
 
 static void
-broadcast_current_workspace_state( desktop_shell *shell)
-{
-	struct wl_resource *resource;
-
-	wl_resource_for_each(resource, &shell->workspaces.client_list)
-		workspace_manager_send_state(resource,
-					     shell->workspaces.current,
-					     shell->workspaces.num);
-}
-
-static void
-reverse_workspace_change_animation( desktop_shell *shell,
-				   unsigned int index,
-				    workspace *from,
-				    workspace *to)
-{
-	shell->workspaces.current = index;
-
-	shell->workspaces.anim_to = to;
-	shell->workspaces.anim_from = from;
-	shell->workspaces.anim_dir = -1 * shell->workspaces.anim_dir;
-	shell->workspaces.anim_timestamp = 0;
-
-	weston_compositor_schedule_repaint(shell->compositor);
-}
-
-static void
-workspace_deactivate_transforms( workspace *ws)
+workspace_deactivate_transforms(workspace *ws)
 {
 	struct weston_view *view;
 	struct weston_transform *transform;
@@ -733,8 +673,8 @@ change_workspace( desktop_shell *shell, unsigned int index)
 	if (shell->workspaces.anim_from == to &&
 	    shell->workspaces.anim_to == from) {
 		shell->restore_focus_state(to);
-		reverse_workspace_change_animation(shell, index, from, to);
-		broadcast_current_workspace_state(shell);
+		shell->reverse_workspace_change_animation(index, from, to);
+		shell->broadcast_current_workspace_state();
 		return;
 	}
 
@@ -762,7 +702,7 @@ change_workspace( desktop_shell *shell, unsigned int index)
 	else
 		animate_workspace_change(shell, index, from, to);
 
-	broadcast_current_workspace_state(shell);
+	shell->broadcast_current_workspace_state();
 }
 
 static bool
@@ -820,8 +760,8 @@ take_surface_to_workspace_by_seat(struct desktop_shell *shell,
 		wl_list_remove(&to->layer.link);
 		wl_list_insert(from->layer.link.prev, &to->layer.link);
 
-		reverse_workspace_change_animation(shell, index, from, to);
-		broadcast_current_workspace_state(shell);
+		shell->reverse_workspace_change_animation(index, from, to);
+		shell->broadcast_current_workspace_state();
 
 		return;
 	}
@@ -843,7 +783,7 @@ take_surface_to_workspace_by_seat(struct desktop_shell *shell,
 		animate_workspace_change(shell, index, from, to);
 	}
 
-	broadcast_current_workspace_state(shell);
+	shell->broadcast_current_workspace_state();
 
 	state = ensure_focus_state(shell, seat);
 	if (state != NULL)

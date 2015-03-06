@@ -32,7 +32,7 @@ enum shell_surface_type {
 
 /**
  * This shell surface is used for both shell_surface and xdg_surface
- * the diference is in resources interfaces.
+ * the difference is in resources interfaces.
  **/
 struct shell_surface {
 	wl_resource *resource;

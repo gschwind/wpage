@@ -109,6 +109,13 @@ xdg_shell_unversioned_dispatch(const void *implementation,
 			       const struct wl_message *message,
 			       union wl_argument *args);
 
+void
+focus_state_destroy(struct focus_state *state);
+
+void
+focus_surface_destroy(struct focus_surface *fsurf);
+
+
 bool
 is_black_surface (struct weston_surface *es, struct weston_surface **fs_surface);
 

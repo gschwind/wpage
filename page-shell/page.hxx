@@ -19,8 +19,6 @@
 #include "config.hxx"
 
 #include "time.hxx"
-#include "display.hxx"
-#include "compositor.hxx"
 
 #include "config_handler.hxx"
 

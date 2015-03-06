@@ -145,11 +145,8 @@ void desktop_shell::move_surface_to_workspace(shell_surface *shsurf,
 }
 
 workspace * desktop_shell::get_workspace(unsigned int index) {
-	workspace **pws =
-			reinterpret_cast<workspace **>(this->workspaces.array.data);
 	assert(index < this->workspaces.num);
-	pws += index;
-	return *pws;
+	return workspaces.array[index];
 }
 
 void desktop_shell::shell_fade(enum fade_type type)
@@ -578,9 +575,9 @@ desktop_shell::~desktop_shell()
 	wl_list_remove(&this->output_create_listener.listener.link);
 	wl_list_remove(&this->output_move_listener.listener.link);
 
-	wl_array_for_each(ws, &this->workspaces.array)
-		workspace_destroy(*ws);
-	wl_array_release(&this->workspaces.array);
+	for(auto &x: workspaces.array) {
+		delete x; x = nullptr;
+	}
 
 	free(this->screensaver.path);
 	free(this->client);
@@ -609,7 +606,6 @@ prepare_event_sent{false},
 text_input{0},
 lock_surface{nullptr},
 lock_surface_listener{0},
-workspaces{0},
 screensaver{0},
 input_panel{0},
 fade{0},
@@ -646,9 +642,6 @@ startup_time{0}
 	weston_layer_init(&this->lock_layer, NULL);
 	weston_layer_init(&this->input_panel_layer, NULL);
 
-	wl_array_init(&this->workspaces.array);
-	wl_list_init(&this->workspaces.client_list);
-
 	if (input_panel_setup(this) < 0)
 		throw exception_t("cannot create panel");
 
@@ -657,15 +650,11 @@ startup_time{0}
 	this->exposay.state_cur = EXPOSAY_LAYOUT_INACTIVE;
 	this->exposay.state_target = EXPOSAY_TARGET_CANCEL;
 
-	for (i = 0; i < this->workspaces.num; i++) {
-		pws = wl_array_add(&this->workspaces.array, sizeof *pws);
-		if (pws == NULL)
-			throw exception_t("cannot create workspace");
-
-		*pws = workspace_create();
-		if (*pws == NULL)
-			throw exception_t("cannot create workspace");
+	workspaces.array.resize(workspaces.num);
+	for (auto &x: workspaces.array) {
+		x = new workspace();
 	}
+
 	activate_workspace(this, 0);
 
 	weston_layer_init(&this->minimized_layer, NULL);
@@ -844,8 +833,7 @@ desktop_shell::bind_workspace_manager(struct wl_client *client,
 	wl_resource_set_implementation(resource,
 				       &page::workspace_manager_implementation,
 				       shell, unbind_resource);
-	wl_list_insert(&shell->workspaces.client_list,
-		       wl_resource_get_link(resource));
+	shell->workspaces.client_list.push_front(resource);
 
 	workspace_manager_send_state(resource,
 				     shell->workspaces.current,
@@ -1568,8 +1556,8 @@ desktop_shell::shell_for_each_layer(shell_for_each_layer_func_t func, void *data
 	func(this, &this->lock_layer, data);
 	func(this, &this->input_panel_layer, data);
 
-	wl_array_for_each(ws, &this->workspaces.array)
-		func(this, &(*ws)->layer, data);
+	for(auto x: workspaces.array)
+		func(this, &x->layer, data);
 }
 
 
@@ -1700,6 +1688,31 @@ void desktop_shell::set_maximized_position(shell_surface *shsurf)
 				 e->x1 + area.x - surf_x,
 				 e->y1 + area.y - surf_y);
 }
+
+void desktop_shell::broadcast_current_workspace_state()
+{
+	struct wl_resource *resource;
+
+	for(auto resource: this->workspaces.client_list) {
+		workspace_manager_send_state(resource, this->workspaces.current, this->workspaces.num);
+	}
+
+}
+
+
+
+void desktop_shell::reverse_workspace_change_animation(unsigned int index, workspace *from, workspace *to)
+{
+	this->workspaces.current = index;
+
+	this->workspaces.anim_to = to;
+	this->workspaces.anim_from = from;
+	this->workspaces.anim_dir = -1 * this->workspaces.anim_dir;
+	this->workspaces.anim_timestamp = 0;
+
+	weston_compositor_schedule_repaint(this->compositor);
+}
+
 
 //
 //static void

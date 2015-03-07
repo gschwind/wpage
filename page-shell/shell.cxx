@@ -1586,7 +1586,16 @@ struct weston_keyboard_grab_interface debug_binding_keyboard_grab = {
 
 
 
+static cairo_surface_t *
+get_cairo_surface_for_weston_buffer(struct weston_buffer * buffer) {
 
+	/** this is not a local texture **/
+	if(buffer->resource != nullptr)
+		return nullptr;
+
+	return cairo_image_surface_create_for_data(weston_local_texture_get_data(buffer->local_tex), CAIRO_FORMAT_ARGB32, buffer->local_tex->width, buffer->local_tex->height, buffer->local_tex->stride);
+
+}
 
 
 /*** THE ENTRY POINT ***/
@@ -1615,6 +1624,15 @@ module_init(struct weston_compositor *ec,
 
 	weston_buffer_reference(&shell->background_tex, v->surface->buffer_ref.buffer);
 
+	i_rect area{0,0,800,600};
+	cairo_surface_t * surf = get_cairo_surface_for_weston_buffer(v->surface->buffer_ref.buffer);
+	cairo_t * cr = cairo_create(surf);
+	/** draw background **/
+	shell->theme->render_empty(cr, area);
+	cairo_destroy(cr);
+	cairo_surface_destroy(surf);
+
+	weston_surface_attach(v->surface, shell->background_tex.buffer);
 
 //
 //	shell = zalloc(sizeof *shell);

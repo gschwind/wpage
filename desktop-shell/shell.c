@@ -4415,19 +4415,19 @@ desktop_shell_set_background(struct wl_client *client,
 		return;
 	}
 
-	wl_list_for_each_safe(view, next, &surface->views, surface_link)
-		weston_view_destroy(view);
-	view = weston_view_create(surface);
-
-	surface->configure = background_configure;
-	surface->configure_private = shell;
-	weston_surface_set_label_func(surface, background_get_label);
-	surface->output = wl_resource_get_user_data(output_resource);
-	view->output = surface->output;
-	desktop_shell_send_configure(resource, 0,
-				     surface_resource,
-				     surface->output->width,
-				     surface->output->height);
+//	wl_list_for_each_safe(view, next, &surface->views, surface_link)
+//		weston_view_destroy(view);
+//	view = weston_view_create(surface);
+//
+//	surface->configure = background_configure;
+//	surface->configure_private = shell;
+//	weston_surface_set_label_func(surface, background_get_label);
+//	surface->output = wl_resource_get_user_data(output_resource);
+//	view->output = surface->output;
+//	desktop_shell_send_configure(resource, 0,
+//				     surface_resource,
+//				     surface->output->width,
+//				     surface->output->height);
 }
 
 static int
@@ -6746,10 +6746,10 @@ module_init(struct weston_compositor *ec,
 	struct weston_output * output = get_default_output(shell->compositor);
 	struct weston_view * v = create_pix_surface(shell->compositor,
             NULL,
-            output->x+100, output->y+100,
-            100,
-            100);
-	weston_layer_entry_insert(&shell->fullscreen_layer.view_list, &v->layer_link);
+            output->x, output->y,
+            output->width,
+            output->height);
+	weston_layer_entry_insert(&shell->background_layer.view_list, &v->layer_link);
 	weston_view_geometry_dirty(v);
 	weston_surface_schedule_repaint(v->surface);
 

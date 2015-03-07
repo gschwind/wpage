@@ -16,6 +16,7 @@
 #include "focus_state.hxx"
 #include "utils.hxx"
 #include "config_handler.hxx"
+#include "theme.hxx"
 
 #define DEFAULT_NUM_WORKSPACES 1
 #define DEFAULT_WORKSPACE_CHANGE_ANIMATION_LENGTH 200
@@ -143,6 +144,7 @@ struct desktop_shell {
 
 	config_handler_t conf;
 	struct weston_buffer_reference background_tex;
+	theme_t * theme;
 
 	desktop_shell(struct weston_compositor *ec, int *argc, char *argv[]);
 	~desktop_shell();

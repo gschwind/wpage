@@ -27,8 +27,6 @@ namespace page {
 class simple2_theme_t : public theme_t {
 public:
 
-	display_t * _cnx;
-
 	std::string notebook_active_font_name;
 	std::string notebook_selected_font_name;
 	std::string notebook_attention_font_name;
@@ -65,8 +63,6 @@ public:
 	cairo_surface_t * bind_button_s;
 
 	cairo_surface_t * background_s;
-
-	xcb_pixmap_t background_p;
 
 	color_t default_background_color;
 
@@ -114,7 +110,7 @@ public:
 	std::string scale_mode;
 
 
-	simple2_theme_t(display_t * cnx, config_handler_t & conf);
+	simple2_theme_t(config_handler_t & conf);
 
 	virtual ~simple2_theme_t();
 

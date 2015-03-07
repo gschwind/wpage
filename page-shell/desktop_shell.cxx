@@ -13,6 +13,7 @@
 #include <signal.h>
 #include <cstring>
 
+#include "simple2_theme.hxx"
 #include "config.h"
 #include "compositor.h"
 #include "shell.h"
@@ -641,6 +642,7 @@ startup_time{0}
 		}
 	}
 
+	theme = new simple2_theme_t{conf};
 
 	this->compositor = ec;
 

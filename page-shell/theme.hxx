@@ -12,6 +12,10 @@
 
 #include <cairo/cairo.h>
 
+#include <memory>
+
+#include "box.hxx"
+
 #include "leak_checker.hxx"
 #include "icon_handler.hxx"
 

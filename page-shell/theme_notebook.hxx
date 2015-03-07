@@ -8,6 +8,8 @@
 #ifndef THEME_NOTEBOOK_HXX_
 #define THEME_NOTEBOOK_HXX_
 
+#include <vector>
+
 namespace page {
 
 struct theme_notebook_t {

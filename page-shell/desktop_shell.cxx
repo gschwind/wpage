@@ -628,6 +628,20 @@ startup_time{0}
 	unsigned int i;
 	struct wl_event_loop *loop;
 
+	/* load default configuration */
+	conf.merge_from_file_if_exist(std::string{"/usr/share" "/page/page.conf"});
+
+	/* load homedir configuration */
+	{
+		char const * chome = getenv("HOME");
+		if(chome != nullptr) {
+			std::string xhome = chome;
+			std::string file = xhome + "/.page.conf";
+			conf.merge_from_file_if_exist(file);
+		}
+	}
+
+
 	this->compositor = ec;
 
 	wl_signal_add(&ec->destroy_signal, &this->destroy_listener.listener);

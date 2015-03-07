@@ -773,12 +773,14 @@ page_shell_la_CPPFLAGS =			\
 	-DDATADIR='"$(datadir)"'		\
 	-DMODULEDIR='"$(moduledir)"'		\
 	-DLIBEXECDIR='"$(libexecdir)"'		\
+	-DWITH_PANGO				\
 	-DIN_WESTON
 
 page_shell_la_LDFLAGS = -module -avoid-version
 page_shell_la_LIBADD = $(COMPOSITOR_LIBS) $(CLIENT_LIBS) $(PANGO_LIBS) libshared.la
-page_shell_la_CFLAGS = $(GCC_CFLAGS) $(COMPOSITOR_CFLAGS) $(CLIENT_CFLAGS) $(PANGO_CFLAGS)
+page_shell_la_CFLAGS = -DWITH_PANGO $(GCC_CFLAGS) $(COMPOSITOR_CFLAGS) $(CLIENT_CFLAGS) $(PANGO_CFLAGS)
 page_shell_la_SOURCES =					\
+	page-shell/simple2_theme.cxx			\
 	page-shell/config_handler.cxx			\
 	page-shell/workspace.cxx			\
 	page-shell/client.cxx				\

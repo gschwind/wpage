@@ -596,6 +596,7 @@ update_input_panel_listener{0},
 fullscreen_layer{0},
 panel_layer{0},
 background_layer{0},
+background_real_layer{0},
 lock_layer{0},
 input_panel_layer{0},
 grab_surface{nullptr},
@@ -638,7 +639,8 @@ startup_time{0}
 
 	weston_layer_init(&this->fullscreen_layer, &ec->cursor_layer.link);
 	weston_layer_init(&this->panel_layer, &this->fullscreen_layer.link);
-	weston_layer_init(&this->background_layer, &this->panel_layer.link);
+	weston_layer_init(&this->background_real_layer, &this->panel_layer.link);
+	weston_layer_init(&this->background_layer, &this->background_real_layer.link);
 	weston_layer_init(&this->lock_layer, NULL);
 	weston_layer_init(&this->input_panel_layer, NULL);
 
@@ -1137,6 +1139,9 @@ desktop_shell::activate_binding(struct weston_seat *seat,
 
 	if (is_black_surface(focus, &main_surface))
 		focus = main_surface;
+
+	if (!focus)
+		return;
 
 	main_surface = weston_surface_get_main_surface(focus);
 	if (get_shell_surface_type(main_surface) == SHELL_SURFACE_NONE)

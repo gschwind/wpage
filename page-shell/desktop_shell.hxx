@@ -50,6 +50,7 @@ struct desktop_shell {
 	struct weston_layer fullscreen_layer;
 	struct weston_layer panel_layer;
 	struct weston_layer background_layer;
+	struct weston_layer background_real_layer;
 	struct weston_layer lock_layer;
 	struct weston_layer input_panel_layer;
 
@@ -138,6 +139,8 @@ struct desktop_shell {
 	char *client;
 
 	struct timespec startup_time;
+
+	struct weston_buffer_reference background_tex;
 
 	desktop_shell(struct weston_compositor *ec, int *argc, char *argv[]);
 	~desktop_shell();

@@ -868,7 +868,7 @@ void shell_surface::shell_configure_fullscreen()
 	weston_layer_entry_remove(&this->view->layer_link);
 	weston_layer_entry_insert(&this->shell->fullscreen_layer.view_list, &this->view->layer_link);
 
-	this->shell_ensure_fullscreen_black_view();
+	shell_ensure_fullscreen_black_view();
 
 	surface_subsurfaces_boundingbox(this->surface, &surf_x, &surf_y,
 	                                &surf_width, &surf_height);
@@ -913,14 +913,14 @@ void shell_surface::shell_configure_fullscreen()
 
 		break;
 	case WL_SHELL_SURFACE_FULLSCREEN_METHOD_DRIVER:
-		if (this->shell_surface_is_top_fullscreen()) {
+		if (shell_surface_is_top_fullscreen()) {
 			struct weston_mode mode = {0,
 				surf_width * surface->buffer_viewport.buffer.scale,
 				surf_height * surface->buffer_viewport.buffer.scale,
 				this->fullscreen.framerate};
 
-			if (weston_output_switch_mode(output, &mode, surface->buffer_viewport.buffer.scale,
-					WESTON_MODE_SWITCH_SET_TEMPORARY) == 0) {
+			if (weston_output_mode_switch_to_temporary(output, &mode,
+					surface->buffer_viewport.buffer.scale) == 0) {
 				weston_view_set_position(this->view,
 							 output->x - surf_x,
 							 output->y - surf_y);

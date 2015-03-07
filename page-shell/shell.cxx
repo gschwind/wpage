@@ -826,8 +826,87 @@ surface_subsurfaces_boundingbox(struct weston_surface *surface, int32_t *x,
 	pixman_region32_fini(&region);
 }
 
+static int
+black_surface_get_label(struct weston_surface *surface, char *buf, size_t len)
+{
+	struct weston_surface *fs_surface = surface->configure_private;
+	int n;
+	int rem;
+	int ret;
+
+	n = snprintf(buf, len, "black background surface for ");
+	if (n < 0)
+		return n;
+
+	rem = (int)len - n;
+	if (rem < 0)
+		rem = 0;
+
+	if (fs_surface->get_label)
+		ret = fs_surface->get_label(fs_surface, buf + n, rem);
+	else
+		ret = snprintf(buf + n, rem, "<unknown>");
+
+	if (ret < 0)
+		return n;
+
+	return n + ret;
+}
 
 
+static struct weston_view *
+create_pix_surface(struct weston_compositor *ec,
+		     struct weston_surface *fs_surface,
+		     float x, float y, int w, int h)
+{
+	struct weston_surface *surface = NULL;
+	struct weston_view *view;
+
+	surface = weston_surface_create(ec);
+	if (surface == NULL) {
+		weston_log("no memory\n");
+		return NULL;
+	}
+	view = weston_view_create(surface);
+	if (surface == NULL) {
+		weston_log("no memory\n");
+		weston_surface_destroy(surface);
+		return NULL;
+	}
+
+	surface->configure = black_surface_configure;
+	surface->configure_private = fs_surface;
+	weston_surface_set_label_func(surface, black_surface_get_label);
+
+
+	struct weston_local_texture * tex;
+	tex = weston_local_texture_create(WL_SHM_FORMAT_ARGB8888, w, h);
+	uint8_t * data = weston_local_texture_get_data(tex);
+
+	int i;
+	for(i = 0; i < w*h*4; ++i) {
+		data[i] = random()%256;
+	}
+
+	struct weston_buffer * buffer = weston_buffer_create_empty();
+
+	/** resource == NULL mean local texture **/
+	buffer->resource = NULL;
+	buffer->local_tex = tex;
+	buffer->width = tex->width;
+	buffer->height = tex->height;
+	weston_surface_attach(surface, buffer);
+
+	pixman_region32_fini(&surface->opaque);
+	pixman_region32_init_rect(&surface->opaque, 0, 0, w, h);
+	pixman_region32_fini(&surface->input);
+	pixman_region32_init_rect(&surface->input, 0, 0, w, h);
+
+	weston_surface_set_size(surface, w, h);
+	weston_view_set_position(view, x, y);
+
+	return view;
+}
 
 
 
@@ -924,12 +1003,8 @@ ping_handler(struct weston_surface *surface, uint32_t serial)
 void
 restore_output_mode(struct weston_output *output)
 {
-	if (output->original_mode ||
-	    (int32_t)output->current_scale != output->original_scale)
-		weston_output_switch_mode(output,
-					  output->native_mode,
-					  output->native_scale,
-					  WESTON_MODE_SWITCH_RESTORE_NATIVE);
+	if (output->original_mode)
+		weston_output_mode_switch_to_native(output);
 }
 
 static void
@@ -1526,6 +1601,21 @@ module_init(struct weston_compositor *ec,
 	struct wl_event_loop *loop;
 
 	shell = new desktop_shell{ec, argc, argv};
+
+
+	struct weston_output * output = get_default_output(shell->compositor);
+	struct weston_view * v = create_pix_surface(shell->compositor,
+            NULL,
+            output->x, output->y,
+            output->width,
+            output->height);
+	weston_layer_entry_insert(&shell->background_real_layer.view_list, &v->layer_link);
+	weston_view_geometry_dirty(v);
+	weston_surface_schedule_repaint(v->surface);
+
+	weston_buffer_reference(&shell->background_tex, v->surface->buffer_ref.buffer);
+
+
 //
 //	shell = zalloc(sizeof *shell);
 //	if (shell == NULL)

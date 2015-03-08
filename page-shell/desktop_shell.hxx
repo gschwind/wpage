@@ -56,6 +56,7 @@ struct desktop_shell {
 	struct weston_layer panel_layer;
 	struct weston_layer background_layer;
 	struct weston_layer background_real_layer;
+	struct weston_layer default_layer;
 	struct weston_layer lock_layer;
 	struct weston_layer input_panel_layer;
 
@@ -248,6 +249,7 @@ struct desktop_shell {
 	void set_maximized_position(shell_surface *shsurf);
 	void broadcast_current_workspace_state();
 	void reverse_workspace_change_animation(unsigned int index, page::workspace *from, page::workspace *to);
+	void update_default_layer();
 
 };
 

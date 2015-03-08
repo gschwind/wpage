@@ -9,6 +9,8 @@
 
 #include "compositor.h"
 #include "surface.hxx"
+#include "workspace.hxx"
+#include "notebook.hxx"
 
 
 namespace page {
@@ -200,6 +202,10 @@ xdg_get_xdg_surface(struct wl_client *client,
 				       &page::xdg_surface_implementation,
 				       shsurf, shell_surface::shell_destroy_shell_surface);
 
+	auto n = filter_class<notebook_t>(shell->workspaces.array[0]->tree_t::get_all_children());
+	n[0]->add_client(shsurf, true);
+
+	shell->update_default_layer();
 	/** force size to 100x100 when xdg_surface is created **/
 	//xdg_client.send_configure(surface, 157, 277);
 	//weston_surface_set_size(surface, 100, 100);

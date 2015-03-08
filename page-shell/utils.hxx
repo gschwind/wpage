@@ -241,6 +241,7 @@ std::vector<T0 *> filter_class(std::vector<T1 *> const & x) {
 			ret.push_back(n);
 		}
 	}
+	printf("length = %d\n", ret.size());
 	return ret;
 }
 

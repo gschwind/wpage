@@ -598,6 +598,7 @@ desktop_shell::desktop_shell(struct weston_compositor *ec, int *argc, char *argv
 	panel_layer{0},
 	background_layer{0},
 	background_real_layer{0},
+	default_layer{0},
 	lock_layer{0},
 	input_panel_layer{0},
 	grab_surface{nullptr},
@@ -654,7 +655,8 @@ desktop_shell::desktop_shell(struct weston_compositor *ec, int *argc, char *argv
 
 	weston_layer_init(&this->fullscreen_layer, &ec->cursor_layer.link);
 	weston_layer_init(&this->panel_layer, &this->fullscreen_layer.link);
-	weston_layer_init(&this->background_real_layer, &this->panel_layer.link);
+	weston_layer_init(&this->default_layer, &this->panel_layer.link);
+	weston_layer_init(&this->background_real_layer, &this->default_layer.link);
 	weston_layer_init(&this->background_layer, &this->background_real_layer.link);
 	weston_layer_init(&this->lock_layer, NULL);
 	weston_layer_init(&this->input_panel_layer, NULL);
@@ -1624,7 +1626,6 @@ desktop_shell::shell_for_each_layer(shell_for_each_layer_func_t func, void *data
 		func(this, &x->layer, data);
 }
 
-
 void desktop_shell::map(shell_surface *shsurf, int32_t sx, int32_t sy)
 {
 	struct weston_compositor *compositor = this->compositor;
@@ -1775,6 +1776,19 @@ void desktop_shell::reverse_workspace_change_animation(unsigned int index, page:
 	this->workspaces.anim_timestamp = 0;
 
 	weston_compositor_schedule_repaint(this->compositor);
+}
+
+void desktop_shell::update_default_layer()
+{
+	/** remove all **/
+	struct weston_layer_entry * v;
+	wl_list_for_each(v, &default_layer.view_list.link, link)
+		wl_list_remove(&v->link);
+
+	for(auto x: filter_class<shell_surface>(workspaces.array[0]->tree_t::get_all_children())) {
+		weston_layer_entry_insert(&default_layer.view_list, &x->view->layer_link);
+	}
+
 }
 
 

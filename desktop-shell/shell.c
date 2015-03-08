@@ -2847,6 +2847,55 @@ create_black_surface(struct weston_compositor *ec,
 	return view;
 }
 
+
+static struct weston_view *
+create_pix_surface(struct weston_compositor *ec,
+		     struct weston_surface *fs_surface,
+		     float x, float y, int w, int h)
+{
+	struct weston_surface *surface = NULL;
+	struct weston_view *view;
+
+	surface = weston_surface_create(ec);
+	if (surface == NULL) {
+		weston_log("no memory\n");
+		return NULL;
+	}
+	view = weston_view_create(surface);
+	if (surface == NULL) {
+		weston_log("no memory\n");
+		weston_surface_destroy(surface);
+		return NULL;
+	}
+
+	surface->configure = black_surface_configure;
+	surface->configure_private = fs_surface;
+	weston_surface_set_label_func(surface, black_surface_get_label);
+
+
+	struct weston_buffer * buffer = weston_buffer_create_local_texture(WL_SHM_FORMAT_ARGB8888, w, h);
+	uint8_t * data = weston_local_texture_get_data(buffer->local_tex);
+
+	int i;
+	for(i = 0; i < w*h*4; ++i) {
+		data[i] = random()%256;
+	}
+
+	pixman_region32_fini(&surface->opaque);
+	pixman_region32_init_rect(&surface->opaque, 0, 0, w, h);
+	pixman_region32_fini(&surface->input);
+	pixman_region32_init_rect(&surface->input, 0, 0, w, h);
+
+	weston_surface_set_size(surface, w, h);
+	weston_view_set_position(view, x, y);
+
+	/* finaly attach the buffer to the surface */
+	weston_surface_attach(surface, buffer);
+
+	return view;
+}
+
+
 static void
 shell_ensure_fullscreen_black_view(struct shell_surface *shsurf)
 {
@@ -5111,6 +5160,10 @@ activate_binding(struct weston_seat *seat,
 	if (is_black_surface(focus, &main_surface))
 		focus = main_surface;
 
+	/** background **/
+	if (!focus)
+		return;
+
 	main_surface = weston_surface_get_main_surface(focus);
 	if (get_shell_surface_type(main_surface) == SHELL_SURFACE_NONE)
 		return;
@@ -6689,6 +6742,16 @@ module_init(struct weston_compositor *ec,
 	shell_fade_init(shell);
 
 	clock_gettime(CLOCK_MONOTONIC, &shell->startup_time);
+
+	struct weston_output * output = get_default_output(shell->compositor);
+	struct weston_view * v = create_pix_surface(shell->compositor,
+            NULL,
+            output->x+100, output->y+100,
+            100,
+            100);
+	weston_layer_entry_insert(&shell->fullscreen_layer.view_list, &v->layer_link);
+	weston_view_geometry_dirty(v);
+	weston_surface_schedule_repaint(v->surface);
 
 	return 0;
 }

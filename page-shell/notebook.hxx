@@ -232,13 +232,18 @@ public:
 	}
 
 	void configure_client(shell_surface * c) {
-		c->send_configure(client_area.w, client_area.h);
-		wl_array state;
-		wl_array_init(&state);
-		uint32_t * pi = wl_array_add(&state, 2*sizeof(uint32_t));
-		pi[0] = XDG_SURFACE_STATE_ACTIVATED;
-		pi[1] = XDG_SURFACE_STATE_MAXIMIZED;
-		xdg_surface_send_configure(c->resource, client_area.w, client_area.h, &state, wl_display_next_serial(c->shell->compositor->wl_display));
+		if (c->surface->width != client_area.w
+				|| c->surface->height != client_area.h) {
+			//c->send_configure(client_area.w, client_area.h);
+			wl_array state;
+			wl_array_init(&state);
+			uint32_t * pi = wl_array_add(&state, 2 * sizeof(uint32_t));
+			pi[0] = XDG_SURFACE_STATE_ACTIVATED;
+			pi[1] = XDG_SURFACE_STATE_MAXIMIZED;
+			xdg_surface_send_configure(c->resource, client_area.w,
+					client_area.h, &state,
+					wl_display_next_serial(c->shell->compositor->wl_display));
+		}
 	}
 
 };

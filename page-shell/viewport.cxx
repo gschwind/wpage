@@ -296,19 +296,54 @@ void viewport_t::expose(region const & r) {
 }
 
 void viewport_t::render_background() {
+
+//	struct weston_buffer * buffer = weston_buffer_create_local_texture(WL_SHM_FORMAT_ARGB8888, _raw_aera.w, _raw_aera.h);
+//	weston_buffer_reference(&background_buffer, buffer);
+
 	cairo_surface_t * surf = get_cairo_surface_for_weston_buffer(
 			background_buffer.buffer);
+
+	printf("resource = %p\n", background_buffer.buffer->resource);
 	cairo_t * cr = cairo_create(surf);
+	cairo_identity_matrix(cr);
+	cairo_reset_clip(cr);
 	/** draw background **/
 	_theme->render_background(cr, this->_raw_aera);
 
 	for(auto i: filter_class<notebook_t>(tree_t::get_all_children())) {
 		i->render_legacy(cr, this->_raw_aera);
+
+		printf("xxxx %s\n", i->allocation().to_string().c_str());
+		cairo_reset_clip(cr);
+		cairo_identity_matrix(cr);
+		_draw_crossed_box(cr, i->allocation(), 1.0, 0.0, 0.0);
+
 	}
+
+//	weston_layer_entry_remove(_wsurf->views))
+//
+//	weston_surface_set_size(surface, x->width, x->height);
+//	weston_view_set_position(view, x->x, x->y);
+//	/** add the surface to a layer **/
+//	weston_layer_entry_insert(&background_real_layer.view_list, &view->layer_link);
+//
+	struct weston_view * view = container_of(_wsurf->views.next, weston_view, surface_link);
+	printf("x = %f, y = %f\n", view->geometry.x, view->geometry.y);
+//
+//	weston_view_set_position(view, 100, 100);
+//	weston_layer_entry_insert(&background_real_layer.view_list, &view->layer_link);
 
 	cairo_destroy(cr);
 	cairo_surface_destroy(surf);
 	weston_surface_attach(_wsurf, background_buffer.buffer);
+	weston_surface_damage(_wsurf);
+
+}
+
+void viewport_t::update_allocation() {
+	if(_subtree) {
+		_subtree->set_allocation(_raw_aera);
+	}
 }
 
 

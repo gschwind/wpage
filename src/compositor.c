@@ -1940,6 +1940,7 @@ weston_buffer_reference(struct weston_buffer_reference *ref,
 							WL_BUFFER_RELEASE);
 			} else {
 				/** destroy current local texture as needed **/
+				printf("freee\n");
 				free(ref->buffer->local_tex);
 				free(ref->buffer);
 			}

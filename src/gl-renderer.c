@@ -1090,7 +1090,8 @@ gl_renderer_flush_damage(struct weston_surface *surface)
 	pixman_region32_union(&gs->texture_damage,
 			      &gs->texture_damage, &surface->damage);
 
-	if(buffer->resource == NULL) {
+	if(buffer->resource == NULL && pixman_region32_not_empty(&gs->texture_damage)) {
+		printf("bind pith = %d, heigth = %d\n", gs->pitch, buffer->height);
 		glBindTexture(GL_TEXTURE_2D, gs->textures[0]);
 		glTexImage2D(GL_TEXTURE_2D, 0, gs->gl_format,
 			     gs->pitch, buffer->height, 0,

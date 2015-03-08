@@ -19,6 +19,7 @@
 
 namespace page {
 	struct workspace;
+	class notebook_t;
 }
 
 #define DEFAULT_NUM_WORKSPACES 1
@@ -250,6 +251,8 @@ struct desktop_shell {
 	void broadcast_current_workspace_state();
 	void reverse_workspace_change_animation(unsigned int index, page::workspace *from, page::workspace *to);
 	void update_default_layer();
+	void split(notebook_t * nbk, split_type_e type);
+	void notebook_close(notebook_t * nbk);
 
 };
 

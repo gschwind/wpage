@@ -765,14 +765,41 @@ struct cxx_weston_buffer_reference : public weston_buffer_reference {
 
 inline cairo_surface_t *
 get_cairo_surface_for_weston_buffer(struct weston_buffer * buffer) {
-
 	/** this is not a local texture **/
 	if(buffer->resource != nullptr)
 		return nullptr;
 
+	printf("width = %d, height = %d stride = %d\n", buffer->local_tex->width, buffer->local_tex->height, buffer->local_tex->stride);
 	return cairo_image_surface_create_for_data(reinterpret_cast<uint8_t*>(weston_local_texture_get_data(buffer->local_tex)), CAIRO_FORMAT_ARGB32, buffer->local_tex->width, buffer->local_tex->height, buffer->local_tex->stride);
 
 }
+
+
+inline void _draw_crossed_box(cairo_t * cr, i_rect const & box, double r, double g,
+		double b) {
+
+	cairo_save(cr);
+	cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
+	cairo_set_antialias(cr, CAIRO_ANTIALIAS_NONE);
+	cairo_identity_matrix(cr);
+
+	cairo_set_source_rgb(cr, r, g, b);
+	cairo_set_line_width(cr, 1.0);
+	cairo_rectangle(cr, box.x + 0.5, box.y + 0.5, box.w - 1.0, box.h - 1.0);
+	cairo_reset_clip(cr);
+	cairo_stroke(cr);
+
+	cairo_new_path(cr);
+	cairo_move_to(cr, box.x + 0.5, box.y + 0.5);
+	cairo_line_to(cr, box.x + box.w - 1.0, box.y + box.h - 1.0);
+
+	cairo_move_to(cr, box.x + box.w - 1.0, box.y + 0.5);
+	cairo_line_to(cr, box.x + 0.5, box.y + box.h - 1.0);
+	cairo_stroke(cr);
+
+	cairo_restore(cr);
+}
+
 
 
 }

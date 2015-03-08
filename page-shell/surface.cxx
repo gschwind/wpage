@@ -29,42 +29,42 @@ shell_surface::shell_surface(
 		void *shell,
 		weston_surface *surface,
 		const weston_shell_client *client) :
-resource{nullptr},
-destroy_signal{0},
-owner{nullptr},
-surface{nullptr},
-view{nullptr},
-last_width{0}, last_height{0},
-_parent{nullptr},
-//children_list{0},  /* child surfaces of this one */
-//children_link{0},  /* sibling surfaces of this one */
-shell{nullptr},
-type{SHELL_SURFACE_NONE},
-title{nullptr}, class_{nullptr},
-saved_x{0}, saved_y{0},
-saved_width{0}, saved_height{0},
-saved_position_valid{false},
-saved_size_valid{false},
-saved_rotation_valid{false},
-unresponsive{0}, grabbed{0},
-resize_edges{0U},
-rotation{0},
-popup{0},
-transient{0},
-fullscreen{},
-workspace_transform{0},
-fullscreen_output{nullptr},
-output{nullptr},
-link{nullptr},
-client{nullptr},
-state{0}, next_state{0}, requested_state{0}, /* surface states */
-state_changed{false},
-state_requested{false},
-geometry{0}, next_geometry{0},
-has_set_geometry{false}, has_next_geometry{false},
-focus_count{0},
-resource_destroy_listener{this, &shell_surface::handle_resource_destroy},
-surface_destroy_listener{this, &shell_surface::shell_handle_surface_destroy}
+	resource{nullptr},
+	destroy_signal{0},
+	owner{nullptr},
+	surface{nullptr},
+	view{nullptr},
+	last_width{0}, last_height{0},
+	_parent{nullptr},
+	//children_list{0},  /* child surfaces of this one */
+	//children_link{0},  /* sibling surfaces of this one */
+	shell{nullptr},
+	type{SHELL_SURFACE_NONE},
+	title{nullptr}, class_{nullptr},
+	saved_x{0}, saved_y{0},
+	saved_width{0}, saved_height{0},
+	saved_position_valid{false},
+	saved_size_valid{false},
+	saved_rotation_valid{false},
+	unresponsive{0}, grabbed{0},
+	resize_edges{0U},
+	rotation{0},
+	popup{0},
+	transient{0},
+	fullscreen{},
+	workspace_transform{0},
+	fullscreen_output{nullptr},
+	output{nullptr},
+	link{nullptr},
+	client{nullptr},
+	state{0}, next_state{0}, requested_state{0}, /* surface states */
+	state_changed{false},
+	state_requested{false},
+	geometry{0}, next_geometry{0},
+	has_set_geometry{false}, has_next_geometry{false},
+	focus_count{0},
+	resource_destroy_listener{this, &shell_surface::handle_resource_destroy},
+	surface_destroy_listener{this, &shell_surface::shell_handle_surface_destroy}
 {
 
 	if (surface->configure) {
@@ -191,6 +191,7 @@ shell_surface::shell_surface_configure(struct weston_surface *es, int32_t sx, in
 
 	notebook_t * n = dynamic_cast<notebook_t*>(shsurf->parent());
 	if(n) {
+
 		n->configure_client(shsurf);
 		n->update_client_position(shsurf);
 	}
@@ -213,6 +214,11 @@ void shell_surface::handle_resource_destroy()
 				fade_out_done, this);
 	} else {
 		weston_surface_destroy(this->surface);
+	}
+
+	notebook_t * n = dynamic_cast<notebook_t*>(parent());
+	if(n) {
+		n->remove_client(this);
 	}
 }
 

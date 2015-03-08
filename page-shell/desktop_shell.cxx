@@ -22,6 +22,8 @@
 #include "surface.hxx"
 #include "exception.hxx"
 #include "workspace.hxx"
+#include "split.hxx"
+#include "notebook.hxx"
 
 void desktop_shell::get_output_work_area(struct weston_output *output,
 		pixman_rectangle32_t *area) {
@@ -438,7 +440,7 @@ void desktop_shell::shell_fade_startup()
 	wl_event_loop_add_idle(loop, do_shell_fade_startup, this);
 }
 
-static void
+void
 desktop_shell::do_shell_fade_startup(void *data)
 {
 	struct desktop_shell *shell = reinterpret_cast<desktop_shell*>(data);
@@ -767,8 +769,6 @@ desktop_shell::desktop_shell(struct weston_compositor *ec, int *argc, char *argv
 
 		weston_surface_set_size(surface, x->width, x->height);
 		weston_view_set_position(view, x->x, x->y);
-		//weston_surface_attach(surface, buffer);
-
 		/** add the surface to a layer **/
 		weston_layer_entry_insert(&background_real_layer.view_list, &view->layer_link);
 
@@ -857,8 +857,7 @@ void desktop_shell::bind_desktop_shell(struct wl_client *client,
 			       "permission to bind desktop_shell denied");
 }
 
-static void
-desktop_shell::bind_screensaver(struct wl_client *client,
+void desktop_shell::bind_screensaver(struct wl_client *client,
 		 void *data, uint32_t version, uint32_t id)
 {
 	struct desktop_shell *shell = data;
@@ -878,7 +877,7 @@ desktop_shell::bind_screensaver(struct wl_client *client,
 			       "interface object already bound");
 }
 
-static void
+void
 desktop_shell::bind_workspace_manager(struct wl_client *client,
 		       void *data, uint32_t version, uint32_t id)
 {
@@ -903,7 +902,7 @@ desktop_shell::bind_workspace_manager(struct wl_client *client,
 				     shell->workspaces.num);
 }
 
-static void
+void
 desktop_shell::launch_desktop_shell_process(void *data)
 {
 	struct desktop_shell *shell = data;
@@ -922,8 +921,7 @@ desktop_shell::launch_desktop_shell_process(void *data)
 				       &shell->child.client_destroy_listener.listener);
 }
 
-static int
-desktop_shell::screensaver_timeout(void *data)
+int desktop_shell::screensaver_timeout(void *data)
 {
 	struct desktop_shell *shell = data;
 	shell->shell_fade(FADE_OUT);
@@ -1075,7 +1073,7 @@ void desktop_shell::unbind_screensaver(struct wl_resource *resource)
 
 void desktop_shell::unbind_resource(struct wl_resource *resource)
 {
-	wl_list_remove(wl_resource_get_link(resource));
+	//wl_list_remove(wl_resource_get_link(resource));
 }
 
 int desktop_shell::fade_startup_timeout(desktop_shell * shell)
@@ -1129,21 +1127,21 @@ do_zoom(struct weston_seat *seat, uint32_t time, uint32_t key, uint32_t axis,
 
 
 
-static void
+ void
 desktop_shell::zoom_axis_binding(struct weston_seat *seat, uint32_t time, uint32_t axis,
 		  wl_fixed_t value, void *data)
 {
 	do_zoom(seat, time, 0, axis, value);
 }
 
-static void
+ void
 desktop_shell::zoom_key_binding(struct weston_seat *seat, uint32_t time, uint32_t key,
 		 void *data)
 {
 	do_zoom(seat, time, key, 0, 0);
 }
 
-static void
+ void
 desktop_shell::terminate_binding(struct weston_seat *seat, uint32_t time, uint32_t key,
 		  void *data)
 {
@@ -1152,7 +1150,7 @@ desktop_shell::terminate_binding(struct weston_seat *seat, uint32_t time, uint32
 	wl_display_terminate(compositor->wl_display);
 }
 
-static void
+void
 desktop_shell::rotate_binding(struct weston_seat *seat, uint32_t time, uint32_t button,
 	       void *data)
 {
@@ -1215,12 +1213,51 @@ void
 desktop_shell::click_to_activate_binding(struct weston_seat *seat, uint32_t time, uint32_t button,
 			  void *data)
 {
+	struct desktop_shell *shell = data;
+	double pointer_x = wl_fixed_to_double(seat->pointer->x);
+	double pointer_y = wl_fixed_to_double(seat->pointer->y);
+	printf("mouse click %u %u %f %f\n", button, time, pointer_x, pointer_y);
+
+	auto page_areas = shell->workspaces.array[0]->compute_page_areas();
+	page_event_t * b = nullptr;
+	for (auto &i : page_areas) {
+		//printf("box (%d,%d,%d,%d) \n", i.position.x, i.position.y, i.position.w, i.position.h);
+		//printf("box = %s => %s\n", (i)->position.to_std::string().c_str(), typeid(*i).name());
+		if (i.position.is_inside(pointer_x, pointer_y)) {
+			b = &i;
+			break;
+		}
+	}
+
+	if(b) {
+		printf("box (%d,%d,%d,%d) \n", b->position.x, b->position.y, b->position.w, b->position.h);
+		if(b->type == PAGE_EVENT_NOTEBOOK_VSPLIT) {
+			shell->split(const_cast<notebook_t*>(b->nbk), VERTICAL_SPLIT);
+			for(auto i: shell->workspaces.array[0]->get_viewports()) {
+				i->update_allocation();
+				i->render_background();
+			}
+		} else if (b->type == PAGE_EVENT_NOTEBOOK_HSPLIT) {
+			shell->split(const_cast<notebook_t*>(b->nbk), HORIZONTAL_SPLIT);
+			for(auto i: shell->workspaces.array[0]->get_viewports()) {
+				i->update_allocation();
+				i->render_background();
+			}
+		} else if(b->type == PAGE_EVENT_NOTEBOOK_CLOSE) {
+			shell->notebook_close(const_cast<notebook_t*>(b->nbk));
+			for(auto i: shell->workspaces.array[0]->get_viewports()) {
+				i->update_allocation();
+				i->render_background();
+			}
+		}
+	}
+
 	if (seat->pointer->grab != &seat->pointer->default_grab)
 		return;
 	if (seat->pointer->focus == NULL)
 		return;
 
-	activate_binding(seat, data, seat->pointer->focus->surface);
+	//activate_binding(seat, data, seat->pointer->focus->surface);
 }
 
 void
@@ -1332,7 +1369,7 @@ desktop_shell::surface_opacity_binding(struct weston_seat *seat, uint32_t time, 
 
 
 
-static void
+void
 desktop_shell::move_binding(struct weston_seat *seat, uint32_t time, uint32_t button, void *data)
 {
 	struct weston_surface *focus;
@@ -1356,8 +1393,7 @@ desktop_shell::move_binding(struct weston_seat *seat, uint32_t time, uint32_t bu
 	shsurf->surface_move((struct weston_seat *) seat, 0);
 }
 
-static void
-desktop_shell::maximize_binding(struct weston_seat *seat, uint32_t time, uint32_t button, void *data)
+void desktop_shell::maximize_binding(struct weston_seat *seat, uint32_t time, uint32_t button, void *data)
 {
 	struct weston_surface *focus = seat->keyboard->focus;
 	struct weston_surface *surface;
@@ -1379,7 +1415,7 @@ desktop_shell::maximize_binding(struct weston_seat *seat, uint32_t time, uint32_
 	shsurf->send_configure_for_surface();
 }
 
-static void
+void
 desktop_shell::fullscreen_binding(struct weston_seat *seat, uint32_t time, uint32_t button, void *data)
 {
 	struct weston_surface *focus = seat->keyboard->focus;
@@ -1403,7 +1439,7 @@ desktop_shell::fullscreen_binding(struct weston_seat *seat, uint32_t time, uint3
 	shsurf->send_configure_for_surface();
 }
 
-static void
+void
 desktop_shell::touch_move_binding(struct weston_seat *seat, uint32_t time, void *data)
 {
 	struct weston_surface *focus;
@@ -1426,7 +1462,7 @@ desktop_shell::touch_move_binding(struct weston_seat *seat, uint32_t time, void 
 	shsurf->surface_touch_move((struct weston_seat *) seat);
 }
 
-static void
+void
 desktop_shell::resize_binding(struct weston_seat *seat, uint32_t time, uint32_t button, void *data)
 {
 	struct weston_surface *focus;
@@ -1619,6 +1655,8 @@ desktop_shell::shell_for_each_layer(shell_for_each_layer_func_t func, void *data
 	func(this, &this->fullscreen_layer, data);
 	func(this, &this->panel_layer, data);
 	func(this, &this->background_layer, data);
+	func(this, &this->background_real_layer, data);
+	func(this, &this->default_layer, data);
 	func(this, &this->lock_layer, data);
 	func(this, &this->input_panel_layer, data);
 
@@ -1638,7 +1676,7 @@ void desktop_shell::map(shell_surface *shsurf, int32_t sx, int32_t sy)
 			center_on_output(shsurf->view, shsurf->fullscreen_output);
 			shsurf->shell_map_fullscreen();
 		} else if (shsurf->state.maximized) {
-			this->set_maximized_position(shsurf);
+			//this->set_maximized_position(shsurf);
 		} else if (!shsurf->state.relative) {
 
 			weston_matrix_init(&(shsurf->rotation.transform.matrix));
@@ -1722,7 +1760,7 @@ void desktop_shell::configure(struct weston_surface *surface, float x, float y)
 	if (shsurf->state.fullscreen)
 		shsurf->shell_configure_fullscreen();
 	else if (shsurf->state.maximized) {
-		this->set_maximized_position(shsurf);
+		//this->set_maximized_position(shsurf);
 	} else {
 		weston_view_set_position(shsurf->view, x, y);
 	}
@@ -1788,6 +1826,69 @@ void desktop_shell::update_default_layer()
 	for(auto x: filter_class<shell_surface>(workspaces.array[0]->tree_t::get_all_children())) {
 		weston_layer_entry_insert(&default_layer.view_list, &x->view->layer_link);
 	}
+
+}
+
+
+void desktop_shell::split(notebook_t * nbk, split_type_e type) {
+	split_t * split = new split_t(type, theme);
+	split->set_allocation(nbk->allocation());
+	nbk->parent()->replace(nbk, split);
+	notebook_t * n = new notebook_t(theme);
+	split->set_pack0(nbk);
+	split->set_pack1(n);
+
+	split->update_allocation();
+}
+
+void desktop_shell::notebook_close(notebook_t * nbk) {
+	/**
+	 * Closing notebook mean destroying the split base of this
+	 * notebook, plus this notebook.
+	 **/
+
+	split_t * splt = dynamic_cast<split_t *>(nbk->parent());
+
+	/* if parent is viewport then we cannot close current notebook */
+	if(splt == nullptr)
+		return;
+
+	assert(nbk == splt->get_pack0() or nbk == splt->get_pack1());
+
+	/* find the sibling branch of note that we want close */
+	page_component_t * dst = (nbk == splt->get_pack0()) ? splt->get_pack1() : splt->get_pack0();
+
+	/* remove this split from tree  and replace it by sibling branch */
+	splt->parent()->replace(splt, dst);
+
+	/**
+	 * if notebook that we want destroy was the default_pop, select
+	 * a new one.
+	 **/
+//	if (_desktop_list[_current_desktop]->default_pop() == nbk) {
+//		_desktop_list[_current_desktop]->update_default_pop();
+//		/* damage the new default pop to show the notebook mark properly */
+//	}
+
+	/* move all client from destroyed notebook to new default pop */
+	auto clients = nbk->get_clients();
+	for(auto i : clients) {
+		//insert_window_in_notebook(i, nullptr, false);
+	}
+
+	/**
+	 * if a fullscreen client want revert to this notebook,
+	 * change it to default_window_pop
+	 **/
+//	for (auto & i : _fullscreen_client_to_viewport) {
+//		if (i.second.revert_notebook == nbk) {
+//			i.second.revert_notebook = _desktop_list[_current_desktop]->default_pop();
+//		}
+//	}
+
+	/* cleanup */
+	delete nbk;
+	delete splt;
 
 }
 

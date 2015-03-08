@@ -22,6 +22,7 @@
 #include "grab_handlers.hxx"
 
 #include "workspace.hxx"
+#include "notebook.hxx"
 
 shell_surface::shell_surface(
 		shell_client *owner,
@@ -185,7 +186,15 @@ shell_surface::shell_surface_configure(struct weston_surface *es, int32_t sx, in
 		shell->configure(es,
 			  shsurf->view->geometry.x + to_x - from_x,
 			  shsurf->view->geometry.y + to_y - from_y);
+
 	}
+
+	notebook_t * n = dynamic_cast<notebook_t*>(shsurf->parent());
+	if(n) {
+		n->configure_client(shsurf);
+		n->update_client_position(shsurf);
+	}
+
 }
 
 void shell_surface::handle_resource_destroy()

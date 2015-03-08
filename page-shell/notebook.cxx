@@ -41,6 +41,7 @@ bool notebook_t::add_client(shell_surface * x, bool prefer_activate) {
 		}
 		configure_client(x);
 		update_client_position(x);
+		x->set_parent(this);
 		_selected = x;
 	} else {
 		//x->iconify();
@@ -136,8 +137,13 @@ void notebook_t::update_client_position(shell_surface * c) {
 
 	weston_view_set_position(c->view, client_area.x, client_area.y);
 
-	double x_ratio = client_area.w / c->surface->width;
-	double y_ratio =  client_area.h / c->surface->height;
+	double x_ratio = 1.0;
+	double y_ratio = 1.0;
+	if (c->surface->width > 0)
+		x_ratio = client_area.w / c->surface->width;
+
+	if (c->surface->height > 0)
+		y_ratio =  client_area.h / c->surface->height;
 
 	weston_matrix_scale(&c->view->transform.matrix, x_ratio, y_ratio, 1.0);
 

@@ -157,8 +157,8 @@ notebook_t * workspace::default_pop() {
 }
 
 void workspace::children(std::vector<tree_t *> & out) const {
-	for(auto i: _viewport_stack) {
-			out.push_back(i);
+	for(auto i: _viewport_outputs) {
+			out.push_back(i.second);
 	}
 
 	for(auto i: _floating_clients) {
@@ -225,9 +225,9 @@ void workspace::set_allocation(i_rect const & area) {
 }
 
 void workspace::get_all_children(std::vector<tree_t *> & out) const {
-	for(auto i: _viewport_stack) {
-		out.push_back(i);
-		i->get_all_children(out);
+	for(auto i: _viewport_outputs) {
+		out.push_back(i.second);
+		i.second->get_all_children(out);
 	}
 
 	for(auto i: _floating_clients) {

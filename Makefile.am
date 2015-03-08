@@ -793,6 +793,7 @@ page_shell_la_SOURCES =					\
 	page-shell/desktop_shell.cxx			\
 	page-shell/grab_handlers.cxx			\
 	page-shell/shell_surface_interface_impl.cxx	\
+	page-shell/xdg_shell_interface_impl.cxx		\
 	page-shell/xdg_surface_interface_impl.cxx	\
 	page-shell/weston_shell_interface_impl.cxx	\
 	page-shell/desktop_shell_interface_impl.cxx	\

@@ -188,6 +188,8 @@ struct shell_surface : public tree_t {
 	virtual auto prepare_render(std::vector<std::shared_ptr<renderable_t>> & out, page::time_t const & time) -> void;
 
 
+	void send_configure(int width, int height);
+
 };
 
 void black_surface_configure(struct weston_surface *es, int32_t sx, int32_t sy);

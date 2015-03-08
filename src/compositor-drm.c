@@ -875,6 +875,9 @@ drm_output_prepare_overlay_view(struct drm_output *output,
 	if (ev->alpha != 1.0f)
 		return NULL;
 
+	if (ev->surface->buffer_ref.buffer->resource == NULL)
+		return NULL;
+
 	if (wl_shm_buffer_get(ev->surface->buffer_ref.buffer->resource))
 		return NULL;
 

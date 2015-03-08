@@ -41,6 +41,7 @@ extern "C" {
 #include "config-parser.h"
 #include "zalloc.h"
 #include "timeline-object.h"
+#include "weston-local-texture.h"
 
 #ifndef MIN
 #define MIN(x,y) (((x) < (y)) ? (x) : (y))
@@ -696,6 +697,7 @@ struct weston_buffer {
 	union {
 		struct wl_shm_buffer *shm_buffer;
 		void *legacy_buffer;
+		struct weston_local_texture * local_tex;
 	};
 	int32_t width, height;
 	uint32_t busy_count;
@@ -1316,6 +1318,9 @@ weston_surface_copy_content(struct weston_surface *surface,
 struct weston_buffer *
 weston_buffer_from_resource(struct wl_resource *resource);
 
+struct weston_buffer *
+weston_buffer_create_local_texture(uint32_t format, int width, int height);
+
 void
 weston_buffer_reference(struct weston_buffer_reference *ref,
 			struct weston_buffer *buffer);
@@ -1498,6 +1503,10 @@ weston_slide_run(struct weston_view *view, float start, float stop,
 void
 weston_surface_set_color(struct weston_surface *surface,
 			 float red, float green, float blue, float alpha);
+
+void
+weston_surface_attach(struct weston_surface *surface,
+		      struct weston_buffer *buffer);
 
 void
 weston_surface_destroy(struct weston_surface *surface);

@@ -82,7 +82,8 @@ enum buffer_type {
 	BUFFER_TYPE_NULL,
 	BUFFER_TYPE_SOLID, /* internal solid color surfaces without a buffer */
 	BUFFER_TYPE_SHM,
-	BUFFER_TYPE_EGL
+	BUFFER_TYPE_EGL,
+	BUFFER_TYPE_LOCAL /* internal texture, buffer without resources */
 };
 
 struct gl_surface_state {
@@ -1089,6 +1090,15 @@ gl_renderer_flush_damage(struct weston_surface *surface)
 	pixman_region32_union(&gs->texture_damage,
 			      &gs->texture_damage, &surface->damage);
 
+	if(buffer->resource == NULL) {
+		glBindTexture(GL_TEXTURE_2D, gs->textures[0]);
+		glTexImage2D(GL_TEXTURE_2D, 0, gs->gl_format,
+			     gs->pitch, buffer->height, 0,
+			     gs->gl_format, gs->gl_pixel_type,
+			     weston_local_texture_get_data(buffer->local_tex));
+		goto done;
+	}
+
 	if (!buffer)
 		return;
 
@@ -1322,6 +1332,61 @@ gl_renderer_attach_egl(struct weston_surface *es, struct weston_buffer *buffer,
 }
 
 static void
+gl_renderer_attach_local(struct weston_surface *es, struct weston_buffer *buffer, struct weston_local_texture * tex)
+{
+	struct weston_compositor *ec = es->compositor;
+	struct gl_renderer *gr = get_renderer(ec);
+	struct gl_surface_state *gs = get_surface_state(es);
+	struct wl_shm_buffer *shm_buffer;
+	EGLint format;
+	int i;
+
+	GLenum gl_format, gl_pixel_type;
+	int pitch;
+
+	switch (tex->format) {
+	case WL_SHM_FORMAT_XRGB8888:
+		gs->shader = &gr->texture_shader_rgbx;
+		pitch = tex->stride / 4;
+		gl_format = GL_BGRA_EXT;
+		gl_pixel_type = GL_UNSIGNED_BYTE;
+		break;
+	case WL_SHM_FORMAT_ARGB8888:
+		gs->shader = &gr->texture_shader_rgba;
+		pitch = tex->stride / 4;
+		gl_format = GL_BGRA_EXT;
+		gl_pixel_type = GL_UNSIGNED_BYTE;
+		break;
+	default:
+		weston_log("warning: unknown shm buffer format: %08x\n",
+				tex->format);
+		return;
+	}
+
+	/* Only allocate a texture if it doesn't match existing one.
+	 * If a switch from DRM allocated buffer to a SHM buffer is
+	 * happening, we need to allocate a new texture buffer. */
+	if (pitch != gs->pitch ||
+			tex->height != gs->height ||
+	    gl_format != gs->gl_format ||
+	    gl_pixel_type != gs->gl_pixel_type ||
+	    gs->buffer_type != BUFFER_TYPE_LOCAL) {
+		gs->pitch = pitch;
+		gs->height = tex->height;
+		gs->target = GL_TEXTURE_2D;
+		gs->gl_format = gl_format;
+		gs->gl_pixel_type = gl_pixel_type;
+		gs->buffer_type = BUFFER_TYPE_LOCAL;
+		gs->needs_full_upload = 1;
+		gs->y_inverted = 1;
+
+		gs->surface = es;
+
+		ensure_textures(gs, 1);
+	}
+}
+
+static void
 gl_renderer_attach(struct weston_surface *es, struct weston_buffer *buffer)
 {
 	struct weston_compositor *ec = es->compositor;
@@ -1346,9 +1411,10 @@ gl_renderer_attach(struct weston_surface *es, struct weston_buffer *buffer)
 		return;
 	}
 
-	shm_buffer = wl_shm_buffer_get(buffer->resource);
-
-	if (shm_buffer)
+	/** local texture found **/
+	if(!buffer->resource)
+		gl_renderer_attach_local(es, buffer, buffer->local_tex);
+	else if (shm_buffer = wl_shm_buffer_get(buffer->resource))
 		gl_renderer_attach_shm(es, buffer, shm_buffer);
 	else if (gr->query_buffer(gr->egl_display, (void *) buffer->resource,
 				  EGL_TEXTURE_FORMAT, &format))
@@ -1460,6 +1526,8 @@ gl_renderer_surface_copy_content(struct weston_surface *surface,
 		/* fall through */
 	case BUFFER_TYPE_EGL:
 		break;
+	case BUFFER_TYPE_LOCAL:
+		gl_renderer_flush_damage(surface);
 	}
 
 	glGenTextures(1, &tex);

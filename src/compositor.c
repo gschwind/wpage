@@ -1885,6 +1885,35 @@ weston_buffer_from_resource(struct wl_resource *resource)
 	return buffer;
 }
 
+WL_EXPORT struct weston_buffer *
+weston_buffer_create_local_texture(uint32_t format, int width, int height)
+{
+	struct weston_buffer *buffer;
+	struct wl_listener *listener;
+
+	buffer = zalloc(sizeof *buffer);
+	if (buffer == NULL)
+		return NULL;
+
+	buffer->resource = NULL;
+	wl_signal_init(&buffer->destroy_signal);
+	buffer->y_inverted = 1;
+
+	struct weston_local_texture * tex;
+	tex = weston_local_texture_create(format, width, height);
+	if(!tex) {
+		free(buffer);
+		return NULL;
+	}
+
+	buffer->local_tex = tex;
+	buffer->width = tex->width;
+	buffer->height = tex->height;
+
+	return buffer;
+}
+
+
 static void
 weston_buffer_reference_handle_destroy(struct wl_listener *listener,
 				       void *data)
@@ -1904,11 +1933,19 @@ weston_buffer_reference(struct weston_buffer_reference *ref,
 	if (ref->buffer && buffer != ref->buffer) {
 		ref->buffer->busy_count--;
 		if (ref->buffer->busy_count == 0) {
-			assert(wl_resource_get_client(ref->buffer->resource));
-			wl_resource_queue_event(ref->buffer->resource,
-						WL_BUFFER_RELEASE);
+			if(ref->buffer->resource) {
+				assert(wl_resource_get_client(ref->buffer->resource));
+				wl_resource_queue_event(ref->buffer->resource,
+							WL_BUFFER_RELEASE);
+			} else {
+				/** destroy current local texture as needed **/
+				free(ref->buffer->local_tex);
+				free(ref->buffer);
+			}
 		}
-		wl_list_remove(&ref->destroy_listener.link);
+		if(ref->buffer->resource) {
+			wl_list_remove(&ref->destroy_listener.link);
+		}
 	}
 
 	if (buffer && buffer != ref->buffer) {
@@ -1921,7 +1958,7 @@ weston_buffer_reference(struct weston_buffer_reference *ref,
 	ref->destroy_listener.notify = weston_buffer_reference_handle_destroy;
 }
 
-static void
+WL_EXPORT void
 weston_surface_attach(struct weston_surface *surface,
 		      struct weston_buffer *buffer)
 {
@@ -1961,6 +1998,10 @@ weston_output_damage(struct weston_output *output)
 static void
 surface_flush_damage(struct weston_surface *surface)
 {
+	if (surface->buffer_ref.buffer &&
+			surface->buffer_ref.buffer->resource == NULL)
+		surface->compositor->renderer->flush_damage(surface);
+
 	if (surface->buffer_ref.buffer &&
 	    wl_shm_buffer_get(surface->buffer_ref.buffer->resource))
 		surface->compositor->renderer->flush_damage(surface);

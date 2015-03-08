@@ -14,6 +14,7 @@
 #include "tree.hxx"
 #include "viewport.hxx"
 #include "focus_state.hxx"
+#include "page_event.hxx"
 
 namespace page {
 
@@ -97,6 +98,9 @@ public:
 
 	workspace();
 	~workspace();
+
+	std::vector<page_event_t> compute_page_areas(std::list<tree_t const *> const & page) const;
+	std::vector<page_event_t> compute_page_areas() const;
 
 };
 

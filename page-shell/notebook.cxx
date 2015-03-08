@@ -86,24 +86,19 @@ std::list<shell_surface *> const & notebook_t::get_clients() {
 }
 
 void notebook_t::remove_client(shell_surface * x) {
-//	assert(has_key(_clients, x));
-//
-//	/** update selection **/
-//	if (_selected == x) {
-//		swap_start.update_to_current_time();
-//		if (x->get_last_pixmap() != nullptr) {
-//			prev_surf = x->get_last_pixmap();
-//			prev_loc = x->base_position();
-//		}
-//		_selected = nullptr;
-//	}
-//
-//	// cleanup
-//	_children.remove(x);
-//	x->set_parent(nullptr);
-//	_clients.remove(x);
-//	_client_map.erase(x);
-//	update_theme_notebook();
+	assert(has_key(_clients, x));
+
+	/** update selection **/
+	if (_selected == x) {
+		_selected = nullptr;
+	}
+
+	// cleanup
+	_children.remove(x);
+	x->set_parent(nullptr);
+	_clients.remove(x);
+	_client_map.erase(x);
+	update_theme_notebook();
 
 }
 
@@ -498,81 +493,81 @@ i_rect notebook_t::compute_notebook_menu_position(
 
 void notebook_t::compute_areas_for_notebook(std::vector<page_event_t> * l) const {
 
-//	{
-//		page_event_t nc(PAGE_EVENT_NOTEBOOK_CLOSE);
-//		nc.position = compute_notebook_close_position(_allocation);
-//		nc.nbk = this;
-//		l->push_back(nc);
-//
-//		page_event_t nhs(PAGE_EVENT_NOTEBOOK_HSPLIT);
-//		nhs.position = compute_notebook_hsplit_position(_allocation);
-//		nhs.nbk = this;
-//		l->push_back(nhs);
-//
-//		page_event_t nvs(PAGE_EVENT_NOTEBOOK_VSPLIT);
-//		nvs.position = compute_notebook_vsplit_position(_allocation);
-//		nvs.nbk = this;
-//		l->push_back(nvs);
-//
-//		page_event_t nm(PAGE_EVENT_NOTEBOOK_MARK);
-//		nm.position = compute_notebook_bookmark_position(_allocation);
-//		nm.nbk = this;
-//		l->push_back(nm);
-//
-//		page_event_t nmn(PAGE_EVENT_NOTEBOOK_MENU);
-//		nmn.position = compute_notebook_menu_position(_allocation);
-//		nmn.nbk = this;
-//		l->push_back(nmn);
-//
-//	}
-//
-//	update_theme_notebook();
-//
-//	if(_clients.size() > 0) {
-//
-//		if(_selected != nullptr) {
-//			i_rect & b = theme_notebook.selected_client.position;
-//
-//			page_event_t ncclose(PAGE_EVENT_NOTEBOOK_CLIENT_CLOSE);
-//
-//			ncclose.position.x = b.x + b.w - 35;
-//			ncclose.position.y = b.y;
-//			ncclose.position.w = 35;
-//			ncclose.position.h = b.h-3;
-//			ncclose.nbk = this;
-//			ncclose.clt = _selected;
-//			l->push_back(ncclose);
-//
-//			page_event_t ncub(PAGE_EVENT_NOTEBOOK_CLIENT_UNBIND);
-//
-//			ncub.position.x = b.x + b.w - 25 - 30;
-//			ncub.position.y = b.y;
-//			ncub.position.w = 16;
-//			ncub.position.h = 16;
-//			ncub.nbk = this;
-//			ncub.clt = _selected;
-//			l->push_back(ncub);
-//
-//			page_event_t nc(PAGE_EVENT_NOTEBOOK_CLIENT);
-//			nc.position = b;
-//			nc.nbk = this;
-//			nc.clt = _selected;
-//			l->push_back(nc);
-//
-//		}
-//
-//		auto c = _clients.begin();
-//		for (unsigned k = 0; k < theme_notebook.clients_tab.size(); ++k) {
-//			i_rect & b = theme_notebook.clients_tab[k].position;
-//			page_event_t nc { PAGE_EVENT_NOTEBOOK_CLIENT };
-//			nc.position = b;
-//			nc.nbk = this;
-//			nc.clt = *c;
-//			l->push_back(nc);
-//			++c;
-//		}
-//
-//	}
+	{
+		page_event_t nc(PAGE_EVENT_NOTEBOOK_CLOSE);
+		nc.position = compute_notebook_close_position(_allocation);
+		nc.nbk = this;
+		l->push_back(nc);
+
+		page_event_t nhs(PAGE_EVENT_NOTEBOOK_HSPLIT);
+		nhs.position = compute_notebook_hsplit_position(_allocation);
+		nhs.nbk = this;
+		l->push_back(nhs);
+
+		page_event_t nvs(PAGE_EVENT_NOTEBOOK_VSPLIT);
+		nvs.position = compute_notebook_vsplit_position(_allocation);
+		nvs.nbk = this;
+		l->push_back(nvs);
+
+		page_event_t nm(PAGE_EVENT_NOTEBOOK_MARK);
+		nm.position = compute_notebook_bookmark_position(_allocation);
+		nm.nbk = this;
+		l->push_back(nm);
+
+		page_event_t nmn(PAGE_EVENT_NOTEBOOK_MENU);
+		nmn.position = compute_notebook_menu_position(_allocation);
+		nmn.nbk = this;
+		l->push_back(nmn);
+
+	}
+
+	update_theme_notebook();
+
+	if(_clients.size() > 0) {
+
+		if(_selected != nullptr) {
+			i_rect & b = theme_notebook.selected_client.position;
+
+			page_event_t ncclose(PAGE_EVENT_NOTEBOOK_CLIENT_CLOSE);
+
+			ncclose.position.x = b.x + b.w - 35;
+			ncclose.position.y = b.y;
+			ncclose.position.w = 35;
+			ncclose.position.h = b.h-3;
+			ncclose.nbk = this;
+			ncclose.clt = _selected;
+			l->push_back(ncclose);
+
+			page_event_t ncub(PAGE_EVENT_NOTEBOOK_CLIENT_UNBIND);
+
+			ncub.position.x = b.x + b.w - 25 - 30;
+			ncub.position.y = b.y;
+			ncub.position.w = 16;
+			ncub.position.h = 16;
+			ncub.nbk = this;
+			ncub.clt = _selected;
+			l->push_back(ncub);
+
+			page_event_t nc(PAGE_EVENT_NOTEBOOK_CLIENT);
+			nc.position = b;
+			nc.nbk = this;
+			nc.clt = _selected;
+			l->push_back(nc);
+
+		}
+
+		auto c = _clients.begin();
+		for (unsigned k = 0; k < theme_notebook.clients_tab.size(); ++k) {
+			i_rect & b = theme_notebook.clients_tab[k].position;
+			page_event_t nc { PAGE_EVENT_NOTEBOOK_CLIENT };
+			nc.position = b;
+			nc.nbk = this;
+			nc.clt = *c;
+			l->push_back(nc);
+			++c;
+		}
+
+	}
 }
 
 void notebook_t::get_all_children(std::vector<tree_t *> & out) const {
@@ -599,7 +594,7 @@ void notebook_t::update_theme_notebook() const {
 			theme_notebook.selected_client.position = b;
 			theme_notebook.selected_client.selected = true;
 			theme_notebook.selected_client.focuced = false;
-			theme_notebook.selected_client.title = "none";
+			theme_notebook.selected_client.title = _selected->title?_selected->title:"none";
 			theme_notebook.selected_client.demand_attention = false;
 			theme_notebook.selected_client.icon = nullptr;
 			theme_notebook.selected_client.is_iconic = false;
@@ -622,7 +617,7 @@ void notebook_t::update_theme_notebook() const {
 			theme_notebook.clients_tab[k].position = b;
 			theme_notebook.clients_tab[k].selected = (i == _selected);
 			theme_notebook.clients_tab[k].focuced = false;
-			theme_notebook.clients_tab[k].title = "None";
+			theme_notebook.clients_tab[k].title = i->title?i->title:"none";
 			theme_notebook.clients_tab[k].demand_attention = false;
 			theme_notebook.clients_tab[k].icon = nullptr;
 			theme_notebook.clients_tab[k].is_iconic = false;

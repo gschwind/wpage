@@ -14,6 +14,7 @@
 #include "notebook.hxx"
 #include "viewport.hxx"
 
+
 namespace page {
 
 workspace::~workspace()
@@ -293,7 +294,45 @@ void workspace::add_weston_output(struct weston_output * output, struct weston_s
 	if(x == _viewport_outputs.end()) {
 		viewport_t * v = new viewport_t(_theme, i_rect(output->x, output->y, output->width, output->height), wsurf, buffer);
 		_viewport_outputs[output] = v;
+		v->set_parent(this);
 	}
+}
+
+std::vector<page_event_t> workspace::compute_page_areas(
+		std::list<tree_t const *> const & page) const {
+
+	std::vector<page_event_t> ret;
+
+	for (auto i : page) {
+		if(dynamic_cast<split_t const *>(i)) {
+			split_t const * s = dynamic_cast<split_t const *>(i);
+			page_event_t bsplit(PAGE_EVENT_SPLIT);
+			bsplit.position = s->compute_split_bar_location();
+
+			if(s->type() == VERTICAL_SPLIT) {
+				bsplit.position.w += _theme->notebook.margin.right + _theme->notebook.margin.left;
+				bsplit.position.x -= _theme->notebook.margin.right;
+			} else {
+				bsplit.position.h += _theme->notebook.margin.bottom;
+				bsplit.position.y -= _theme->notebook.margin.bottom;
+			}
+
+			bsplit.spt = s;
+			ret.push_back(bsplit);
+		} else if (dynamic_cast<notebook_t const *>(i)) {
+			notebook_t const * n = dynamic_cast<notebook_t const *>(i);
+			n->compute_areas_for_notebook(&ret);
+		}
+	}
+
+	return ret;
+}
+
+std::vector<page_event_t>  workspace::compute_page_areas() const {
+	std::vector<tree_t *> tmp = tree_t::get_all_children();
+	std::list<tree_t const *> lc(tmp.begin(), tmp.end());
+	std::vector<page_event_t> page_areas{compute_page_areas(lc)};
+	return page_areas;
 }
 
 }

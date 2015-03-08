@@ -115,8 +115,7 @@ static void xdg_use_unstable_version(struct wl_client *client,
 			 int32_t version)
 {
 	if (version > 1) {
-		wl_resource_post_error(resource,
-				       1,
+		wl_resource_post_error(resource, 1,
 				       "xdg-shell:: version not implemented yet.");
 		return;
 	}

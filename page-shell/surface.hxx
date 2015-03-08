@@ -104,13 +104,18 @@ struct shell_surface : public tree_t {
 	const weston_shell_client *client;
 
 	struct surface_state {
-		bool maximized;bool fullscreen;bool relative;bool lowered;
+		bool maximized;
+		bool fullscreen;
+		bool relative;
+		bool lowered;
 	} state, next_state, requested_state; /* surface states */
-	bool state_changed;bool state_requested;
+	bool state_changed;
+	bool state_requested;
 
 	struct {
 		int32_t x, y, width, height;
-	} geometry, next_geometry;bool has_set_geometry, has_next_geometry;
+	} geometry, next_geometry;
+	bool has_set_geometry, has_next_geometry;
 
 	int focus_count;
 

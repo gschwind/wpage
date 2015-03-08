@@ -159,6 +159,8 @@ public:
 
 	void render_background();
 
+	void update_allocation();
+
 
 };
 

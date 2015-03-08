@@ -44,6 +44,8 @@ class split_t : public page_component_t {
 
 	void update_allocation_pack0();
 	void update_allocation_pack1();
+
+public:
 	void update_allocation();
 
 public:

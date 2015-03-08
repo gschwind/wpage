@@ -191,6 +191,9 @@ public:
 
 	virtual void render_menuentry(cairo_t * cr, theme_dropdown_menu_entry_t const & item, i_rect const & area, bool selected);
 
+	virtual void render_background(cairo_t * cr, i_rect const & area);
+
+
 //	virtual std::vector<page_event_t> * compute_page_areas(
 //			std::list<tree_t const *> const & page) const;
 //	virtual std::vector<floating_event_t> * compute_floating_areas(

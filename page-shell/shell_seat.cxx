@@ -108,8 +108,19 @@ void shell_seat::shell_seat_caps_changed()
 
 shell_seat * shell_seat::get_shell_seat(weston_seat *seat)
 {
+	printf("ref = %p\n", &cxx_wl_listener<shell_seat>::call);
+	struct wl_listener *l;
+	wl_list_for_each(l, &seat->destroy_signal.listener_list, link) {
+		printf("%p\n", l->notify);
+		printf("l = %p\n", l);
+	}
+
+	printf("XXXX= %p\n", wl_signal_get(&seat->destroy_signal, reinterpret_cast<wl_notify_func_t>(&cxx_wl_listener<shell_seat>::call)));
+
+	/** the crazy way to find data ... for seat **/
+	/** look to listener that have a function than may be have the seat data **/
 	cxx_wl_listener<shell_seat> * listener;
-	listener = reinterpret_cast<cxx_wl_listener<shell_seat> *>(wl_signal_get(&seat->destroy_signal, reinterpret_cast<wl_notify_func_t>(cxx_wl_listener<shell_seat>::call)));
+	listener = reinterpret_cast<cxx_wl_listener<shell_seat> *>(wl_signal_get(&seat->destroy_signal, reinterpret_cast<wl_notify_func_t>(&cxx_wl_listener<shell_seat>::call)));
 	assert(listener != nullptr);
 	return listener->data;
 }

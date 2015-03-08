@@ -739,8 +739,7 @@ void shell_surface_send_popup_done(shell_surface *shsurf)
 	if (shsurf->shell_surface_is_wl_shell_surface())
 		wl_shell_surface_send_popup_done(shsurf->resource);
 	else if (shsurf->shell_surface_is_xdg_popup())
-		xdg_popup_send_popup_done(shsurf->resource,
-					  shsurf->popup.serial);
+		xdg_popup_send_popup_done(shsurf->resource);
 }
 
 

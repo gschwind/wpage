@@ -280,11 +280,11 @@ void split_t::remove(tree_t * t) {
 }
 
 void split_t::prepare_render(std::vector<std::shared_ptr<renderable_t>> & out, page::time_t const & time) {
-	if(_is_hidden)
-		return;
-	for(auto i: _children) {
-		i->prepare_render(out, time);
-	}
+//	if(_is_hidden)
+//		return;
+//	for(auto i: _children) {
+//		i->prepare_render(out, time);
+//	}
 }
 
 i_rect split_t::compute_split_bar_location() const {

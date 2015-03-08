@@ -21,6 +21,8 @@
 #include "protocols_implementation.hxx"
 #include "grab_handlers.hxx"
 
+#include "workspace.hxx"
+
 shell_surface::shell_surface(
 		shell_client *owner,
 		void *shell,
@@ -32,9 +34,9 @@ owner{nullptr},
 surface{nullptr},
 view{nullptr},
 last_width{0}, last_height{0},
-parent{nullptr},
-children_list{0},  /* child surfaces of this one */
-children_link{0},  /* sibling surfaces of this one */
+_parent{nullptr},
+//children_list{0},  /* child surfaces of this one */
+//children_link{0},  /* sibling surfaces of this one */
 shell{nullptr},
 type{SHELL_SURFACE_NONE},
 title{nullptr}, class_{nullptr},
@@ -108,9 +110,9 @@ surface_destroy_listener{this, &shell_surface::shell_handle_surface_destroy}
 
 	wl_list_init(&this->workspace_transform.link);
 
-	wl_list_init(&this->children_link);
-	wl_list_init(&this->children_list);
-	this->parent = NULL;
+	//wl_list_init(&this->children_link);
+	//wl_list_init(&this->children_list);
+	this->_parent = NULL;
 
 	this->type = SHELL_SURFACE_NONE;
 
@@ -243,7 +245,7 @@ void shell_surface::remove_popup_grab()
 
 void shell_surface::set_surface_type()
 {
-	struct weston_surface *pes = this->parent;
+	struct weston_surface *pes = this->_parent;
 	struct weston_view *pev = get_default_view(pes);
 
 	reset_surface_type();
@@ -303,8 +305,10 @@ shell_surface::~shell_surface()
 
 	weston_view_destroy(this->view);
 
-	wl_list_remove(&this->children_link);
-	wl_list_for_each_safe(child, next, &this->children_list, children_link)
+	if(tree_parent)
+		tree_parent->remove(this);
+	//wl_list_remove(&this->children_link);
+	for(auto child: _children)
 		child->shell_surface_set_parent(nullptr);
 
 	wl_list_remove(&this->link);
@@ -447,17 +451,20 @@ shell_surface::shell_surface_get_shell()
 
 void shell_surface::shell_surface_set_parent(weston_surface *parent)
 {
-	this->parent = parent;
+	this->_parent = parent;
 
-	wl_list_remove(&this->children_link);
-	wl_list_init(&this->children_link);
+	if(tree_parent)
+		tree_parent->remove(this);
+	//wl_list_remove(&this->children_link);
+	//wl_list_init(&this->children_link);
 
 	/* Insert into the parent surface’s child list. */
 	if (parent != NULL) {
 		shell_surface *parent_shsurf = shell_surface::get_shell_surface(parent);
 		if (parent_shsurf != NULL)
-			wl_list_insert(&parent_shsurf->children_list,
-			               &this->children_link);
+			parent_shsurf->_children.push_back(this);
+			//wl_list_insert(&parent_shsurf->children_list,
+			//              &this->children_link);
 	}
 }
 
@@ -466,7 +473,7 @@ void shell_surface::shell_surface_set_parent(weston_surface *parent)
  * returned link). */
 weston_layer_entry * shell_surface::shell_surface_calculate_layer_link ()
 {
-	struct workspace *ws;
+	page::workspace *ws;
 	struct weston_view *parent;
 
 	switch (this->type) {
@@ -480,14 +487,14 @@ weston_layer_entry * shell_surface::shell_surface_calculate_layer_link ()
 	case SHELL_SURFACE_TOPLEVEL:
 		if (this->state.fullscreen && !this->state.lowered) {
 			return &this->shell->fullscreen_layer.view_list;
-		} else if (this->parent) {
+		} else if (this->_parent) {
 			/* Move the surface to its parent layer so
 			 * that surfaces which are transient for
 			 * fullscreen surfaces don't get hidden by the
 			 * fullscreen surfaces. */
 
 			/* TODO: Handle a parent with multiple views */
-			parent = get_default_view(this->parent);
+			parent = get_default_view(this->_parent);
 			if (parent)
 				return container_of(parent->layer_link.link.prev,
 						    struct weston_layer_entry, link);
@@ -505,12 +512,11 @@ weston_layer_entry * shell_surface::shell_surface_calculate_layer_link ()
 
 void shell_surface::shell_surface_update_child_surface_layers()
 {
-	struct shell_surface *child;
 	struct weston_layer_entry *prev;
 
 	/* Move the child layers to the same workspace as shsurf. They will be
 	 * stacked above shsurf. */
-	wl_list_for_each_reverse(child, &this->children_list, children_link) {
+	for(auto child: _children) {
 		if (this->view->layer_link.link.prev != &child->view->layer_link.link) {
 			weston_view_damage_below(child->view);
 			weston_view_geometry_dirty(child->view);
@@ -752,7 +758,7 @@ int shell_surface::surface_resize(struct weston_seat *seat, uint32_t edges)
 	    (edges & resize_leftright) == resize_leftright)
 		return 0;
 
-	resize = malloc(sizeof *resize);
+	resize = reinterpret_cast<weston_resize_grab*>(malloc(sizeof *resize));
 	if (!resize)
 		return -1;
 
@@ -1008,7 +1014,7 @@ void shell_surface::shell_ensure_fullscreen_black_view()
 void shell_surface::shell_map_popup()
 {
 	page::shell_seat *shseat = this->popup.shseat;
-	struct weston_view *parent_view = get_default_view(this->parent);
+	struct weston_view *parent_view = get_default_view(this->_parent);
 
 	this->surface->output = parent_view->output;
 	this->view->output = parent_view->output;
@@ -1075,6 +1081,50 @@ void shell_surface::remove_popup_grab2()
 			shseat->popup_grab.touch_grab.interface = NULL;
 		}
 	}
+}
+
+auto shell_surface::parent() const -> tree_t * {
+	return tree_parent;
+}
+
+auto shell_surface::get_node_name() const -> std::string {
+	return tree_t::_get_node_name<'M'>();
+}
+
+auto shell_surface::raise_child(tree_t * t = nullptr) -> void {
+
+}
+
+auto shell_surface::remove(tree_t * t) -> void {
+
+}
+
+auto shell_surface::set_parent(tree_t * parent) -> void {
+	tree_parent = parent;
+}
+
+auto shell_surface::children(std::vector<tree_t *> & out) const -> void {
+	/* TODO */
+}
+
+auto shell_surface::get_all_children(std::vector<tree_t *> & out) const -> void {
+
+}
+
+auto shell_surface::get_visible_children(std::vector<tree_t *> & out) -> void {
+
+}
+
+auto shell_surface::hide() -> void {
+	/* TODO remove */
+}
+
+auto shell_surface::show() -> void {
+	/* TODO remove */
+}
+
+auto shell_surface::prepare_render(std::vector<std::shared_ptr<renderable_t>> & out, page::time_t const & time) -> void {
+	/* TODO remove */
 }
 
 

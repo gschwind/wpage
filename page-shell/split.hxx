@@ -10,8 +10,11 @@
 #ifndef SPLIT_HXX_
 #define SPLIT_HXX_
 
+#include "exception.hxx"
+#include "utils.hxx"
 #include "theme.hxx"
 #include "page_component.hxx"
+
 
 namespace page {
 

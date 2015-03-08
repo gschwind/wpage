@@ -9,8 +9,9 @@
 #ifndef PAGE_SHELL_FOCUS_STATE_HXX_
 #define PAGE_SHELL_FOCUS_STATE_HXX_
 
-#include "workspace.hxx"
-#include "exposay.hxx"
+namespace page {
+	struct workspace;
+}
 
 struct focus_surface {
 	struct weston_surface *surface;
@@ -21,7 +22,6 @@ struct focus_surface {
 struct shell_output {
 	struct desktop_shell  *shell;
 	struct weston_output  *output;
-	struct exposay_output eoutput;
 	struct wl_listener    destroy_listener;
 	struct wl_list        link;
 };
@@ -29,7 +29,7 @@ struct shell_output {
 
 struct focus_state {
 	struct weston_seat *seat;
-	struct workspace *ws;
+	page::workspace *ws;
 	struct weston_surface *keyboard_focus;
 	struct wl_list link;
 	struct wl_listener seat_destroy_listener;

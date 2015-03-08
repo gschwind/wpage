@@ -13,6 +13,7 @@
 #include "compositor.h"
 #include "surface.hxx"
 #include "shell.h"
+#include "workspace.hxx"
 
 /**
  * XDG surface interface implementation.

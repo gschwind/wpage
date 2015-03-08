@@ -13,6 +13,8 @@
 #include "compositor.h"
 #include "protocols_implementation.hxx"
 
+#include "tree.hxx"
+
 #include "client.hxx"
 #include "shell_seat.hxx"
 #include "utils.hxx"
@@ -34,7 +36,7 @@ enum shell_surface_type {
  * This shell surface is used for both shell_surface and xdg_surface
  * the difference is in resources interfaces.
  **/
-struct shell_surface {
+struct shell_surface : public tree_t {
 	wl_resource *resource;
 	wl_signal destroy_signal;
 	shell_client *owner;
@@ -45,9 +47,8 @@ struct shell_surface {
 	cxx_wl_listener<shell_surface> surface_destroy_listener;
 	cxx_wl_listener<shell_surface> resource_destroy_listener;
 
-	weston_surface *parent;
-	wl_list children_list; /* child surfaces of this one */
-	wl_list children_link; /* sibling surfaces of this one */
+	weston_surface *_parent;
+	std::list<shell_surface*> _children;
 	desktop_shell *shell;
 
 	enum shell_surface_type type;
@@ -113,6 +114,9 @@ struct shell_surface {
 
 	int focus_count;
 
+	tree_t * tree_parent;
+
+
 	shell_surface(shell_client * owner, void * shell, weston_surface * surface, weston_shell_client const *client);
 	~shell_surface();
 
@@ -166,6 +170,23 @@ struct shell_surface {
 	void shell_map_popup();
 	void add_popup_grab(page::shell_seat *shseat, int32_t type);
 	void remove_popup_grab2();
+
+
+	/**
+	 * Tree API
+	 **/
+	virtual auto parent() const -> tree_t *;
+	virtual auto get_node_name() const -> std::string;
+	virtual auto raise_child(tree_t * t = nullptr) -> void;
+	virtual auto remove(tree_t * t) -> void;
+	virtual auto set_parent(tree_t * parent) -> void;
+	virtual auto children(std::vector<tree_t *> & out) const -> void;
+	virtual auto get_all_children(std::vector<tree_t *> & out) const -> void;
+	virtual auto get_visible_children(std::vector<tree_t *> & out) -> void;
+	virtual auto hide() -> void;
+	virtual auto show() -> void;
+	virtual auto prepare_render(std::vector<std::shared_ptr<renderable_t>> & out, page::time_t const & time) -> void;
+
 
 };
 

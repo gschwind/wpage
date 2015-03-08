@@ -1,7 +1,7 @@
 /*
  * notebook.hxx
  *
- * copyright (2010-2014) Benoit Gschwind
+ * copyright (2010-2015) Benoit Gschwind
  *
  * This code is licensed under the GPLv3. see COPYING file for more details.
  *
@@ -15,20 +15,13 @@
 #include <cassert>
 #include <memory>
 
+#include "exception.hxx"
+#include "surface.hxx"
 #include "theme.hxx"
-#include "pixmap.hxx"
-#include "renderable_notebook_fading.hxx"
 #include "page_event.hxx"
-#include "renderable_notebook_fading.hxx"
-#include "renderable_pixmap.hxx"
-#include "renderable_empty.hxx"
-
 #include "page_component.hxx"
-#include "client_managed.hxx"
 
 namespace page {
-
-class client_managed_t;
 
 struct img_t {
   unsigned int   width;
@@ -52,10 +45,9 @@ class notebook_t : public page_component_t {
 
 	page::time_t swap_start;
 
-	std::shared_ptr<pixmap_t> prev_surf;
-	i_rect prev_loc;
-
-	std::shared_ptr<renderable_notebook_fading_t> fading_notebook;
+//	std::shared_ptr<pixmap_t> prev_surf;
+//	i_rect prev_loc;
+//	std::shared_ptr<renderable_notebook_fading_t> fading_notebook;
 
 	mutable theme_notebook_t theme_notebook;
 
@@ -73,11 +65,11 @@ public:
 		SELECT_RIGHT
 	};
 	// list of client to maintain tab order
-	std::list<client_managed_t *> _clients;
-	client_managed_t * _selected;
+	std::list<shell_surface *> _clients;
+	shell_surface * _selected;
 
 	// set of map for fast check is window is in this notebook
-	set<client_managed_t *> _client_map;
+	set<shell_surface *> _client_map;
 
 	i_rect client_area;
 
@@ -101,9 +93,9 @@ public:
 	i_rect close_client_area;
 	i_rect undck_client_area;
 
-	void set_selected(client_managed_t * c);
+	void set_selected(shell_surface * c);
 
-	void update_client_position(client_managed_t * c);
+	void update_client_position(shell_surface * c);
 
 public:
 	notebook_t(theme_t const * theme);
@@ -116,13 +108,13 @@ public:
 	void close(tree_t * src);
 	void remove(tree_t * src);
 
-	std::list<client_managed_t *> const & get_clients();
+	std::list<shell_surface *> const & get_clients();
 
-	bool add_client(client_managed_t * c, bool prefer_activate);
-	void remove_client(client_managed_t * c);
+	bool add_client(shell_surface * c, bool prefer_activate);
+	void remove_client(shell_surface * c);
 
-	void activate_client(client_managed_t * x);
-	void iconify_client(client_managed_t * x);
+	void activate_client(shell_surface * x);
+	void iconify_client(shell_surface * x);
 
 	i_rect get_new_client_size();
 
@@ -151,7 +143,7 @@ public:
 		_parent = t;
 	}
 
-	client_managed_t * find_client_tab(int x, int y);
+	shell_surface * find_client_tab(int x, int y);
 
 	void update_close_area();
 
@@ -162,15 +154,15 @@ public:
 	 * @output height: height result
 	 */
 
-	static void compute_client_size_with_constraint(client_managed_t * c,
+	static void compute_client_size_with_constraint(shell_surface * c,
 			unsigned int max_width, unsigned int max_height,
 			unsigned int & width, unsigned int & height);
 
-	i_rect compute_client_size(client_managed_t * c);
+	i_rect compute_client_size(shell_surface * c);
 	i_rect const & get_allocation();
 	void set_theme(theme_t const * theme);
-	std::list<client_managed_t const *> clients() const;
-	client_managed_t const * selected() const;
+	std::list<shell_surface const *> clients() const;
+	shell_surface const * selected() const;
 	bool is_default() const;
 	void set_default(bool x);
 	std::list<tree_t *> childs() const;
@@ -180,7 +172,7 @@ public:
 	void render(cairo_t * cr, time_t time);
 	bool need_render(time_t time);
 
-	client_managed_t * get_selected();
+	shell_surface * get_selected();
 
 	virtual void prepare_render(std::vector<std::shared_ptr<renderable_t>> & out, page::time_t const & time);
 
@@ -235,7 +227,7 @@ public:
 		}
 	}
 
-	bool has_client(client_managed_t * c) {
+	bool has_client(shell_surface * c) {
 		return has_key(_client_map, c);
 	}
 

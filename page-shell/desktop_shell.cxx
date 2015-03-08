@@ -17,11 +17,11 @@
 #include "config.h"
 #include "compositor.h"
 #include "shell.h"
-#include "exposay.hxx"
 #include "grab_handlers.hxx"
 #include "focus_state.hxx"
 #include "surface.hxx"
 #include "exception.hxx"
+#include "workspace.hxx"
 
 void desktop_shell::get_output_work_area(struct weston_output *output,
 		pixman_rectangle32_t *area) {
@@ -94,7 +94,7 @@ void desktop_shell::get_output_panel_size(struct weston_output *output,
 	/* the correct view wasn't found */
 }
 
-void desktop_shell::drop_focus_state(struct workspace *ws,
+void desktop_shell::drop_focus_state(page::workspace *ws,
 		struct weston_surface *surface) {
 	struct focus_state *state;
 
@@ -105,8 +105,8 @@ void desktop_shell::drop_focus_state(struct workspace *ws,
 
 void desktop_shell::move_surface_to_workspace(shell_surface *shsurf,
 		uint32_t workspace) {
-	struct workspace *from;
-	struct workspace *to;
+	page::workspace *from;
+	page::workspace *to;
 	weston_seat *seat;
 	weston_surface *focus;
 	weston_view *view;
@@ -145,7 +145,7 @@ void desktop_shell::move_surface_to_workspace(shell_surface *shsurf,
 	weston_view_damage_below(view);
 }
 
-workspace * desktop_shell::get_workspace(unsigned int index) {
+page::workspace * desktop_shell::get_workspace(unsigned int index) {
 	assert(index < this->workspaces.num);
 	return workspaces.array[index];
 }
@@ -244,7 +244,7 @@ desktop_shell::shell_fade_create_surface()
 
 void desktop_shell::lock()
 {
-	struct workspace *ws = get_current_workspace(this);
+	page::workspace *ws = get_current_workspace(this);
 
 	if (this->locked) {
 		weston_compositor_sleep(this->compositor);
@@ -334,7 +334,7 @@ void desktop_shell::unfocus_all_seats()
 
 void desktop_shell::resume_desktop()
 {
-	struct workspace *ws = get_current_workspace(this);
+	page::workspace *ws = get_current_workspace(this);
 
 	terminate_screensaver();
 
@@ -386,7 +386,7 @@ void desktop_shell::terminate_screensaver()
 	kill(this->screensaver.process.pid, SIGTERM);
 }
 
-void desktop_shell::restore_focus_state(struct workspace *ws)
+void desktop_shell::restore_focus_state(page::workspace *ws)
 {
 	struct focus_state *state, *next;
 	struct weston_surface *surface;
@@ -550,7 +550,7 @@ void desktop_shell::shell_destroy()
 
 desktop_shell::~desktop_shell()
 {
-	struct workspace **ws;
+	page::workspace **ws;
 	struct shell_output *shell_output, *tmp;
 
 	/* Force state to unlocked so we don't try to fade */
@@ -586,46 +586,45 @@ desktop_shell::~desktop_shell()
 
 
 desktop_shell::desktop_shell(struct weston_compositor *ec, int *argc, char *argv[]) :
-destroy_listener{this, &desktop_shell::shell_destroy},
-wake_listener{this, &desktop_shell::wake_handler},
-idle_listener{this, &desktop_shell::idle_handler},
-seat_create_listener{this, &desktop_shell::handle_seat_created},
-compositor{nullptr},
-show_input_panel_listener{0},
-hide_input_panel_listener{0},
-update_input_panel_listener{0},
-fullscreen_layer{0},
-panel_layer{0},
-background_layer{0},
-background_real_layer{0},
-lock_layer{0},
-input_panel_layer{0},
-grab_surface{nullptr},
-child{0},
-locked{false},
-showing_input_panels{false},
-prepare_event_sent{false},
-text_input{0},
-lock_surface{nullptr},
-lock_surface_listener{0},
-screensaver{0},
-input_panel{0},
-fade{0},
-exposay{0},
-binding_modifier{0},
-exposay_modifier{0},
-win_animation_type{ANIMATION_NONE},
-win_close_animation_type{ANIMATION_NONE},
-startup_animation_type{ANIMATION_NONE},
-focus_animation_type{ANIMATION_NONE},
-minimized_layer{0},
-output_list{0},
-panel_position{DESKTOP_SHELL_PANEL_POSITION_TOP},
-client{nullptr},
-startup_time{0}
+	destroy_listener{this, &desktop_shell::shell_destroy},
+	wake_listener{this, &desktop_shell::wake_handler},
+	idle_listener{this, &desktop_shell::idle_handler},
+	seat_create_listener{this, &desktop_shell::handle_seat_created},
+	compositor{nullptr},
+	show_input_panel_listener{0},
+	hide_input_panel_listener{0},
+	update_input_panel_listener{0},
+	fullscreen_layer{0},
+	panel_layer{0},
+	background_layer{0},
+	background_real_layer{0},
+	lock_layer{0},
+	input_panel_layer{0},
+	grab_surface{nullptr},
+	child{0},
+	locked{false},
+	showing_input_panels{false},
+	prepare_event_sent{false},
+	text_input{0},
+	lock_surface{nullptr},
+	lock_surface_listener{0},
+	screensaver{0},
+	input_panel{0},
+	fade{0},
+	binding_modifier{0},
+	exposay_modifier{0},
+	win_animation_type{ANIMATION_NONE},
+	win_close_animation_type{ANIMATION_NONE},
+	startup_animation_type{ANIMATION_NONE},
+	focus_animation_type{ANIMATION_NONE},
+	minimized_layer{0},
+	output_list{0},
+	panel_position{DESKTOP_SHELL_PANEL_POSITION_TOP},
+	client{nullptr},
+	startup_time{0}
 {
 	struct weston_seat *seat;
-	struct workspace **pws;
+	page::workspace **pws;
 	unsigned int i;
 	struct wl_event_loop *loop;
 
@@ -665,12 +664,13 @@ startup_time{0}
 
 	this->shell_configuration();
 
-	this->exposay.state_cur = EXPOSAY_LAYOUT_INACTIVE;
-	this->exposay.state_target = EXPOSAY_TARGET_CANCEL;
-
 	workspaces.array.resize(workspaces.num);
+	{
+	int i = 0;
 	for (auto &x: workspaces.array) {
-		x = new workspace();
+		x = new page::workspace(i, theme);
+		++i;
+	}
 	}
 
 	activate_workspace(this, 0);
@@ -736,6 +736,49 @@ startup_time{0}
 	screenshooter_create(ec);
 
 	shell_add_bindings(ec);
+
+	/** create the background surface for each outputs **/
+	struct weston_output * x;
+	wl_list_for_each(x, &compositor->output_list, link) {
+		struct weston_buffer * buffer = weston_buffer_create_local_texture(WL_SHM_FORMAT_ARGB8888, x->width, x->height);
+		weston_buffer_reference(&outputs_backgrounds[x], buffer);
+
+		uint8_t * data = weston_local_texture_get_data(buffer->local_tex);
+
+		int i;
+		for(i = 0; i < x->width*x->height*4; ++i) {
+			data[i] = random()%256;
+		}
+
+		struct weston_surface *surface = NULL;
+		struct weston_view *view;
+
+		surface = weston_surface_create(ec);
+		if (surface == NULL) {
+			throw exception_t("no memory\n");
+		}
+		view = weston_view_create(surface);
+		if (surface == NULL) {
+			weston_surface_destroy(surface);
+			throw exception_t("no memory\n");
+		}
+
+		weston_surface_set_size(surface, x->width, x->height);
+		weston_view_set_position(view, x->x, x->y);
+		//weston_surface_attach(surface, buffer);
+
+		/** add the surface to a layer **/
+		weston_layer_entry_insert(&background_real_layer.view_list, &view->layer_link);
+
+		for (auto &y: workspaces.array) {
+			y->add_weston_output(x, surface, buffer);
+		}
+
+	}
+
+	for(auto i: workspaces.array[0]->get_viewports()) {
+		i->render_background();
+	}
 
 	shell_fade_init();
 
@@ -988,10 +1031,10 @@ void desktop_shell::shell_add_bindings(struct weston_compositor *ec)
 //	weston_compositor_add_key_binding(ec, KEY_DOWN, mod | MODIFIER_SHIFT,
 //					  workspace_move_surface_down_binding,
 //					  this);
-
-	if (this->exposay_modifier)
-		weston_compositor_add_modifier_binding(ec, static_cast<uint32_t>(this->exposay_modifier),
-						       x_exposay_binding, this);
+//
+//	if (this->exposay_modifier)
+//		weston_compositor_add_modifier_binding(ec, static_cast<uint32_t>(this->exposay_modifier),
+//						       x_exposay_binding, this);
 
 	/* Add bindings for mod+F[1-6] for workspace 1 to 6. */
 	if (this->workspaces.num > 1) {
@@ -1569,7 +1612,7 @@ void desktop_shell::handle_output_move(void *data)
 void
 desktop_shell::shell_for_each_layer(shell_for_each_layer_func_t func, void *data)
 {
-	struct workspace **ws;
+	page::workspace **ws;
 
 	func(this, &this->fullscreen_layer, data);
 	func(this, &this->panel_layer, data);
@@ -1722,7 +1765,7 @@ void desktop_shell::broadcast_current_workspace_state()
 
 
 
-void desktop_shell::reverse_workspace_change_animation(unsigned int index, workspace *from, workspace *to)
+void desktop_shell::reverse_workspace_change_animation(unsigned int index, page::workspace *from, page::workspace *to)
 {
 	this->workspaces.current = index;
 

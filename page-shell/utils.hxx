@@ -752,6 +752,27 @@ struct cxx_wl_listener<T> {
 
 };
 
+struct cxx_weston_buffer_reference : public weston_buffer_reference {
+	cxx_weston_buffer_reference() : weston_buffer_reference{0} { }
+	~cxx_weston_buffer_reference() {
+		if(buffer != nullptr)
+			::weston_buffer_reference(this, nullptr);
+	}
+
+};
+
+
+inline cairo_surface_t *
+get_cairo_surface_for_weston_buffer(struct weston_buffer * buffer) {
+
+	/** this is not a local texture **/
+	if(buffer->resource != nullptr)
+		return nullptr;
+
+	return cairo_image_surface_create_for_data(reinterpret_cast<uint8_t*>(weston_local_texture_get_data(buffer->local_tex)), CAIRO_FORMAT_ARGB32, buffer->local_tex->width, buffer->local_tex->height, buffer->local_tex->stride);
+
+}
+
 
 }
 

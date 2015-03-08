@@ -46,7 +46,9 @@
 #include "shell_seat.hxx"
 #include "desktop_shell.hxx"
 #include "focus_state.hxx"
+#include "workspace.hxx"
 
+using namespace page;
 
 #define DEFAULT_NUM_WORKSPACES 1
 #define DEFAULT_WORKSPACE_CHANGE_ANIMATION_LENGTH 200
@@ -645,7 +647,7 @@ animate_workspace_change( desktop_shell *shell,
 }
 
 static void
-update_workspace( desktop_shell *shell, unsigned int index,
+update_workspace(desktop_shell *shell, unsigned int index,
 		  workspace *from,  workspace *to)
 {
 	shell->workspaces.current = index;
@@ -878,24 +880,13 @@ create_pix_surface(struct weston_compositor *ec,
 	surface->configure_private = fs_surface;
 	weston_surface_set_label_func(surface, black_surface_get_label);
 
-
-	struct weston_local_texture * tex;
-	tex = weston_local_texture_create(WL_SHM_FORMAT_ARGB8888, w, h);
-	uint8_t * data = weston_local_texture_get_data(tex);
+	struct weston_buffer * buffer = weston_buffer_create_local_texture(WL_SHM_FORMAT_ARGB8888, w, h);
+	uint8_t * data = weston_local_texture_get_data(buffer->local_tex);
 
 	int i;
 	for(i = 0; i < w*h*4; ++i) {
 		data[i] = random()%256;
 	}
-
-	struct weston_buffer * buffer = weston_buffer_create_empty();
-
-	/** resource == NULL mean local texture **/
-	buffer->resource = NULL;
-	buffer->local_tex = tex;
-	buffer->width = tex->width;
-	buffer->height = tex->height;
-	weston_surface_attach(surface, buffer);
 
 	pixman_region32_fini(&surface->opaque);
 	pixman_region32_init_rect(&surface->opaque, 0, 0, w, h);
@@ -904,6 +895,8 @@ create_pix_surface(struct weston_compositor *ec,
 
 	weston_surface_set_size(surface, w, h);
 	weston_view_set_position(view, x, y);
+
+	weston_surface_attach(surface, buffer);
 
 	return view;
 }
@@ -1218,10 +1211,6 @@ weston_view_set_initial_position(struct weston_view *view,
 	weston_view_set_position(view, x, y);
 }
 
-
-
-
-
 static void launch_desktop_shell_process(void *data);
 
 int
@@ -1233,14 +1222,14 @@ xdg_shell_unversioned_dispatch(const void *implementation,
 	struct wl_resource *resource = _target;
 	struct shell_client *sc = wl_resource_get_user_data(resource);
 
-	if (opcode != 0) {
+	if (opcode != 1 /* XDG_SHELL_USE_UNSTABLE_VERSION */) {
 		wl_resource_post_error(resource,
 				       WL_DISPLAY_ERROR_INVALID_OBJECT,
 				       "must call use_unstable_version first");
 		return 0;
 	}
 
-#define XDG_SERVER_VERSION 4
+#define XDG_SERVER_VERSION 5
 
 	static_assert(XDG_SERVER_VERSION == XDG_SHELL_VERSION_CURRENT,
 		      "shell implementation doesn't match protocol version");
@@ -1290,7 +1279,7 @@ switcher_next(struct switcher *switcher)
 		shsurf = shell_surface::get_shell_surface(view->surface);
 		if (shsurf &&
 		    shsurf->type == SHELL_SURFACE_TOPLEVEL &&
-		    shsurf->parent == NULL) {
+		    shsurf->_parent == NULL) {
 			if (first == NULL)
 				first = view->surface;
 			if (prev == switcher->current)
@@ -1577,27 +1566,6 @@ struct weston_keyboard_grab_interface debug_binding_keyboard_grab = {
 	debug_binding_cancel,
 };
 
-
-
-
-
-
-
-
-
-
-static cairo_surface_t *
-get_cairo_surface_for_weston_buffer(struct weston_buffer * buffer) {
-
-	/** this is not a local texture **/
-	if(buffer->resource != nullptr)
-		return nullptr;
-
-	return cairo_image_surface_create_for_data(weston_local_texture_get_data(buffer->local_tex), CAIRO_FORMAT_ARGB32, buffer->local_tex->width, buffer->local_tex->height, buffer->local_tex->stride);
-
-}
-
-
 /*** THE ENTRY POINT ***/
 WL_EXPORT int
 module_init(struct weston_compositor *ec,
@@ -1612,139 +1580,27 @@ module_init(struct weston_compositor *ec,
 	shell = new desktop_shell{ec, argc, argv};
 
 
-	struct weston_output * output = get_default_output(shell->compositor);
-	struct weston_view * v = create_pix_surface(shell->compositor,
-            NULL,
-            output->x, output->y,
-            output->width,
-            output->height);
-	weston_layer_entry_insert(&shell->background_real_layer.view_list, &v->layer_link);
-	weston_view_geometry_dirty(v);
-	weston_surface_schedule_repaint(v->surface);
-
-	weston_buffer_reference(&shell->background_tex, v->surface->buffer_ref.buffer);
-
-	i_rect area{0,0,800,600};
-	cairo_surface_t * surf = get_cairo_surface_for_weston_buffer(v->surface->buffer_ref.buffer);
-	cairo_t * cr = cairo_create(surf);
-	/** draw background **/
-	shell->theme->render_empty(cr, area);
-	cairo_destroy(cr);
-	cairo_surface_destroy(surf);
-
-	weston_surface_attach(v->surface, shell->background_tex.buffer);
-
+//	struct weston_output * output = get_default_output(shell->compositor);
+//	struct weston_view * v = create_pix_surface(shell->compositor,
+//            NULL,
+//            output->x, output->y,
+//            output->width,
+//            output->height);
+//	weston_layer_entry_insert(&shell->background_real_layer.view_list, &v->layer_link);
+//	weston_view_geometry_dirty(v);
+//	weston_surface_schedule_repaint(v->surface);
 //
-//	shell = zalloc(sizeof *shell);
-//	if (shell == NULL)
-//		return -1;
+//	weston_buffer_reference(&shell->background_tex, v->surface->buffer_ref.buffer);
 //
-//	shell->compositor = ec;
+//	i_rect area{0,0,800,600};
+//	cairo_surface_t * surf = get_cairo_surface_for_weston_buffer(v->surface->buffer_ref.buffer);
+//	cairo_t * cr = cairo_create(surf);
+//	/** draw background **/
+//	shell->theme->render_empty(cr, area);
+//	cairo_destroy(cr);
+//	cairo_surface_destroy(surf);
 //
-//	shell->destroy_listener.notify = shell_destroy;
-//	wl_signal_add(&ec->destroy_signal, &shell->destroy_listener);
-//	shell->idle_listener.notify = idle_handler;
-//	wl_signal_add(&ec->idle_signal, &shell->idle_listener);
-//	shell->wake_listener.notify = wake_handler;
-//	wl_signal_add(&ec->wake_signal, &shell->wake_listener);
-//
-//	ec->shell_interface = page::weston_shell_interface_impl;
-//	ec->shell_interface.shell = shell;
-//
-//	weston_layer_init(&shell->fullscreen_layer, &ec->cursor_layer.link);
-//	weston_layer_init(&shell->panel_layer, &shell->fullscreen_layer.link);
-//	weston_layer_init(&shell->background_layer, &shell->panel_layer.link);
-//	weston_layer_init(&shell->lock_layer, NULL);
-//	weston_layer_init(&shell->input_panel_layer, NULL);
-//
-//	wl_array_init(&shell->workspaces.array);
-//	wl_list_init(&shell->workspaces.client_list);
-//
-//	if (input_panel_setup(shell) < 0)
-//		return -1;
-//
-//	shell->shell_configuration();
-//
-//	shell->exposay.state_cur = EXPOSAY_LAYOUT_INACTIVE;
-//	shell->exposay.state_target = EXPOSAY_TARGET_CANCEL;
-//
-//	for (i = 0; i < shell->workspaces.num; i++) {
-//		pws = wl_array_add(&shell->workspaces.array, sizeof *pws);
-//		if (pws == NULL)
-//			return -1;
-//
-//		*pws = workspace_create();
-//		if (*pws == NULL)
-//			return -1;
-//	}
-//	activate_workspace(shell, 0);
-//
-//	weston_layer_init(&shell->minimized_layer, NULL);
-//
-//	wl_list_init(&shell->workspaces.anim_sticky_list);
-//	wl_list_init(&shell->workspaces.animation.link);
-//	shell->workspaces.animation.frame = animate_workspace_change_frame;
-//
-//	/**
-//	 * create a global interface of type shell
-//	 * wl_shell_interface is the description of shell_interface defined in libwayland.
-//	 **/
-//	if (wl_global_create(ec->wl_display, &wl_shell_interface, 1,
-//				  shell, bind_shell) == NULL)
-//		return -1;
-//
-//	/**
-//	 * create a global interface of type xdg-shell
-//	 * xdg_shell_interface is the description of xdg-shell-insterface defined in _weston_ only.
-//	 **/
-//	if (wl_global_create(ec->wl_display, &xdg_shell_interface, 1,
-//				  shell, bind_xdg_shell) == NULL)
-//		return -1;
-//
-//	/**
-//	 * create a global interface of type desktop_shell_interface
-//	 * desktop_shell_interface is an extension provided by _weston_ only and is intend to be used by client
-//	 * to dynamically change setting of weston.
-//	 *
-//	 * xdg_shell_interface is the description of xdg-shell-interface defined in _weston_ only.
-//	 **/
-//	if (wl_global_create(ec->wl_display,
-//			     &desktop_shell_interface, 3,
-//			     shell, bind_desktop_shell) == NULL)
-//		return -1;
-//
-//	if (wl_global_create(ec->wl_display, &screensaver_interface, 1,
-//			     shell, bind_screensaver) == NULL)
-//		return -1;
-//
-//	if (wl_global_create(ec->wl_display, &workspace_manager_interface, 1,
-//			     shell, bind_workspace_manager) == NULL)
-//		return -1;
-//
-//	shell->child.deathstamp = weston_compositor_get_time();
-//
-//	shell->panel_position = DESKTOP_SHELL_PANEL_POSITION_TOP;
-//
-//	setup_output_destroy_handler(ec, shell);
-//
-//	loop = wl_display_get_event_loop(ec->wl_display);
-//	wl_event_loop_add_idle(loop, launch_desktop_shell_process, shell);
-//
-//	shell->screensaver.timer =
-//		wl_event_loop_add_timer(loop, screensaver_timeout, shell);
-//
-//	wl_list_for_each(seat, &ec->seat_list, link)
-//		handle_seat_created(NULL, seat);
-//	shell->seat_create_listener.notify = handle_seat_created;
-//	wl_signal_add(&ec->seat_created_signal, &shell->seat_create_listener);
-//
-//	screenshooter_create(ec);
-//
-//	shell_add_bindings(ec, shell);
-//
-//	shell_fade_init(shell);
-//
-//	clock_gettime(CLOCK_MONOTONIC, &shell->startup_time);
+//	weston_surface_attach(v->surface, shell->background_tex.buffer);
 
 	return 0;
 }

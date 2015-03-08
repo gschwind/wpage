@@ -780,6 +780,10 @@ page_shell_la_LDFLAGS = -module -avoid-version
 page_shell_la_LIBADD = $(COMPOSITOR_LIBS) $(CLIENT_LIBS) $(PANGO_LIBS) libshared.la
 page_shell_la_CFLAGS = -DWITH_PANGO $(GCC_CFLAGS) $(COMPOSITOR_CFLAGS) $(CLIENT_CFLAGS) $(PANGO_CFLAGS)
 page_shell_la_SOURCES =					\
+	page-shell/tree.cxx				\
+	page-shell/notebook.cxx				\
+	page-shell/split.cxx				\
+	page-shell/viewport.cxx				\
 	page-shell/simple2_theme.cxx			\
 	page-shell/config_handler.cxx			\
 	page-shell/workspace.cxx			\
@@ -793,7 +797,6 @@ page_shell_la_SOURCES =					\
 	page-shell/weston_shell_interface_impl.cxx	\
 	page-shell/desktop_shell_interface_impl.cxx	\
 	page-shell/protocols_implementation.cxx		\
-	page-shell/exposay.cxx				\
 	page-shell/input-panel.cxx			\
 	page-shell/shell.h				\
 	page-shell/shell.cxx

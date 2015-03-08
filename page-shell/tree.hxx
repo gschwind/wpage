@@ -82,7 +82,7 @@ public:
 	/**
 	 * return the list of renderable object to draw this tree ordered and recursively
 	 **/
-	virtual auto prepare_render(std::vector<std::shared_ptr<renderable_t>> & out, page::time_t const & time) -> void = 0;
+	//virtual auto prepare_render(std::vector<std::shared_ptr<renderable_t>> & out, page::time_t const & time) -> void = 0;
 
 	/**
 	 * Useful template to generate node name.

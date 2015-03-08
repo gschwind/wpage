@@ -12,11 +12,14 @@
 #include "compositor.h"
 #include "desktop-shell-server-protocol.h"
 
-#include "exposay.hxx"
 #include "focus_state.hxx"
 #include "utils.hxx"
 #include "config_handler.hxx"
 #include "theme.hxx"
+
+namespace page {
+	struct workspace;
+}
 
 #define DEFAULT_NUM_WORKSPACES 1
 #define DEFAULT_WORKSPACE_CHANGE_ANIMATION_LENGTH 200
@@ -82,7 +85,7 @@ struct desktop_shell {
 
 	struct {
 		/* array of workspaces */
-		std::vector<workspace*> array;
+		std::vector<page::workspace*> array;
 		/* current workspace id */
 		unsigned int current;
 		/* size of array */
@@ -96,8 +99,8 @@ struct desktop_shell {
 		int anim_dir;
 		uint32_t anim_timestamp;
 		double anim_current;
-		struct workspace *anim_from;
-		struct workspace *anim_to;
+		page::workspace *anim_from;
+		page::workspace *anim_to;
 	} workspaces;
 
 	struct {
@@ -119,8 +122,6 @@ struct desktop_shell {
 		enum fade_type type;
 		struct wl_event_source *startup_timer;
 	} fade;
-
-	struct exposay exposay;
 
 	uint32_t binding_modifier;
 	uint32_t exposay_modifier;
@@ -146,14 +147,18 @@ struct desktop_shell {
 	struct weston_buffer_reference background_tex;
 	theme_t * theme;
 
+
+	std::map<struct weston_output*, cxx_weston_buffer_reference> outputs_backgrounds;
+
+
 	desktop_shell(struct weston_compositor *ec, int *argc, char *argv[]);
 	~desktop_shell();
 
 	void get_output_work_area(struct weston_output *output, pixman_rectangle32_t *area);
 	void get_output_panel_size(struct weston_output *output, int *width, int *height);
-	void drop_focus_state(struct workspace *ws, struct weston_surface *surface);
+	void drop_focus_state(page::workspace *ws, struct weston_surface *surface);
 	void move_surface_to_workspace(shell_surface *shsurf, uint32_t workspace);
-	workspace * get_workspace(unsigned int index);
+	page::workspace * get_workspace(unsigned int index);
 
 	void shell_fade(fade_type type);
 	struct weston_view * shell_fade_create_surface();
@@ -169,7 +174,7 @@ struct desktop_shell {
 	void resume_desktop();
 	void terminate_screensaver();
 
-	void restore_focus_state(struct workspace *ws);
+	void restore_focus_state(page::workspace *ws);
 
 	void shell_fade_startup();
 	static void do_shell_fade_startup(void *data);
@@ -242,7 +247,7 @@ struct desktop_shell {
 	void configure(struct weston_surface *surface, float x, float y);
 	void set_maximized_position(shell_surface *shsurf);
 	void broadcast_current_workspace_state();
-	void reverse_workspace_change_animation(unsigned int index, workspace *from, workspace *to);
+	void reverse_workspace_change_animation(unsigned int index, page::workspace *from, page::workspace *to);
 
 };
 

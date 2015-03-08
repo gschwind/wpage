@@ -35,8 +35,8 @@
 #include "shell_seat.hxx"
 #include "client.hxx"
 #include "surface.hxx"
-#include "exposay.hxx"
 #include "desktop_shell.hxx"
+#include "focus_state.hxx"
 
 void
 center_on_output(struct weston_view *view,
@@ -49,13 +49,13 @@ namespace page {
 extern weston_view * get_default_view(weston_surface *surface);
 }
 
-struct workspace *
+page::workspace *
 get_current_workspace(struct desktop_shell *shell);
 
 void
 activate_workspace( desktop_shell *shell, unsigned int index);
 
-workspace * workspace_create();
+page::workspace * workspace_create();
 
 void
 animate_workspace_change_frame(weston_animation *animation,
@@ -75,7 +75,7 @@ activate(struct desktop_shell *shell, struct weston_surface *es,
 }
 
 void
-workspace_destroy(struct workspace *ws);
+workspace_destroy(page::workspace *ws);
 
 int
 input_panel_setup(struct desktop_shell *shell);

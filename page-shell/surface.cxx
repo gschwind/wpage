@@ -674,6 +674,10 @@ void shell_surface::send_configure_for_surface()
 	this->client->send_configure(this->surface, width, height);
 }
 
+void shell_surface::send_configure(int width, int height) {
+	this->client->send_configure(this->surface, width, height);
+}
+
 void shell_surface::surface_rotate(struct weston_seat *seat)
 {
 	struct rotate_grab *rotate;

@@ -231,6 +231,10 @@ public:
 		return has_key(_client_map, c);
 	}
 
+	void configure_client(shell_surface * c) {
+		c->send_configure(client_area.w, client_area.h);
+	}
+
 };
 
 }

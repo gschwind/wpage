@@ -7,6 +7,7 @@
  *
  */
 
+#include "compositor.h"
 #include "notebook.hxx"
 
 namespace page {
@@ -26,45 +27,33 @@ notebook_t::~notebook_t() {
 }
 
 bool notebook_t::add_client(shell_surface * x, bool prefer_activate) {
-//	assert(not has_key(_clients, x));
-//	assert(x != nullptr);
-//	x->set_parent(this);
-//	_children.push_back(x);
-//	_clients.push_front(x);
-//	_client_map.insert(x);
-//
-//	if(prefer_activate) {
-//		swap_start.update_to_current_time();
-//
-//		if(_selected != nullptr) {
-//			/** get current shell_surface then iconify **/
-//			if (_selected->get_last_pixmap() != nullptr) {
-//				prev_loc = _selected->base_position();
-//				prev_surf = _selected->get_last_pixmap();
-//			}
-//			_selected->iconify();
-//		} else {
-//			/** no prev surf is used **/
-//			prev_surf.reset();
-//		}
-//		update_client_position(x);
-//		x->normalize();
-//		x->reconfigure();
-//		_selected = x;
-//
-//	} else {
-//		x->iconify();
-//		if(_selected != nullptr) {
-//			/* do nothing */
-//		} else {
-//			/** no prev surf is used **/
-//			_selected = x;
-//			prev_surf.reset();
-//		}
-//	}
-//
-//	update_theme_notebook();
-//	return true;
+	assert(not has_key(_clients, x));
+	assert(x != nullptr);
+	x->set_parent(this);
+	_children.push_back(x);
+	_clients.push_front(x);
+	_client_map.insert(x);
+
+	if(prefer_activate) {
+		if(_selected != nullptr) {
+			/** TODO remove the view **/
+			//_selected->iconify();
+		}
+		configure_client(x);
+		update_client_position(x);
+		_selected = x;
+	} else {
+		//x->iconify();
+		if(_selected != nullptr) {
+			/* do nothing */
+		} else {
+			/** no prev surf is used **/
+			_selected = x;
+		}
+	}
+
+	update_theme_notebook();
+	return true;
 }
 
 i_rect notebook_t::get_new_client_size() {
@@ -144,10 +133,14 @@ void notebook_t::set_selected(shell_surface * c) {
 }
 
 void notebook_t::update_client_position(shell_surface * c) {
-//	/* compute the window placement within notebook */
-//	i_rect client_size = compute_client_size(c);
-//	c->set_notebook_wished_position(client_size);
-//	c->reconfigure();
+
+	weston_view_set_position(c->view, client_area.x, client_area.y);
+
+	double x_ratio = client_area.w / c->surface->width;
+	double y_ratio =  client_area.h / c->surface->height;
+
+	weston_matrix_scale(&c->view->transform.matrix, x_ratio, y_ratio, 1.0);
+
 }
 
 void notebook_t::iconify_client(shell_surface * x) {

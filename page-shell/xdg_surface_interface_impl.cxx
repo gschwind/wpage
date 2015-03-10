@@ -57,6 +57,7 @@ static void
 xdg_surface_destroy(struct wl_client *client,
 		    struct wl_resource *resource)
 {
+	printf("xdg_surface_destroy\n");
 	wl_resource_destroy(resource);
 }
 
@@ -65,6 +66,7 @@ xdg_surface_set_parent(struct wl_client *client,
 		       struct wl_resource *resource,
 		       struct wl_resource *parent_resource)
 {
+	printf("xdg_surface_set_parent\n");
 	shell_surface *shsurf = wl_resource_get_user_data(resource);
 	struct weston_surface *parent;
 
@@ -81,6 +83,7 @@ xdg_surface_set_app_id(struct wl_client *client,
 		       struct wl_resource *resource,
 		       const char *app_id)
 {
+	printf("xdg_surface_set_app_id\n");
 	shell_surface *shsurf = wl_resource_get_user_data(resource);
 
 	free(shsurf->class_);
@@ -95,6 +98,7 @@ xdg_surface_show_window_menu(struct wl_client *client,
 			     int32_t x,
 			     int32_t y)
 {
+	printf("xdg_surface_show_window_menu\n");
 	/* TODO */
 }
 
@@ -102,8 +106,8 @@ static void
 xdg_surface_set_title(struct wl_client *client,
 			struct wl_resource *resource, const char *title)
 {
+	printf("xdg_surface_set_title(%p,%p,%s)\n", client, resource, title);
 	shell_surface *shsurf = wl_resource_get_user_data(resource);
-
 	page::weston_shell_interface_impl.set_title(shsurf, title);
 }
 
@@ -111,6 +115,7 @@ static void
 xdg_surface_move(struct wl_client *client, struct wl_resource *resource,
 		 struct wl_resource *seat_resource, uint32_t serial)
 {
+	printf("xdg_surface_move\n");
 	shell_surface::common_surface_move(resource, seat_resource, serial);
 }
 
@@ -119,6 +124,7 @@ xdg_surface_resize(struct wl_client *client, struct wl_resource *resource,
 		   struct wl_resource *seat_resource, uint32_t serial,
 		   uint32_t edges)
 {
+	printf("xdg_surface_resize\n");
 	shell_surface::common_surface_resize(resource, seat_resource, serial, edges);
 }
 
@@ -145,14 +151,15 @@ xdg_surface_set_window_geometry(struct wl_client *client,
 				int32_t width,
 				int32_t height)
 {
+	printf("xdg_surface_set_window_geometry(%p,%p,x=%d,y=%d,w=%d,h=%d)\n",client,resource,x,y,width,height);
 	shell_surface *shsurf = wl_resource_get_user_data(resource);
-
 	page::weston_shell_interface_impl.set_window_geometry(shsurf, x, y, width, height);
 }
 
 static struct weston_output *
 get_focused_output(struct weston_compositor *compositor)
 {
+	printf("get_focused_output\n");
 	struct weston_seat *seat;
 	struct weston_output *output = NULL;
 
@@ -199,6 +206,7 @@ static void
 xdg_surface_unset_maximized(struct wl_client *client,
 			    struct wl_resource *resource)
 {
+	printf("xdg_surface_unset_maximized\n");
 	shell_surface *shsurf = wl_resource_get_user_data(resource);
 
 	shsurf->state_requested = true;
@@ -211,6 +219,7 @@ xdg_surface_set_fullscreen(struct wl_client *client,
 			   struct wl_resource *resource,
 			   struct wl_resource *output_resource)
 {
+	printf("xdg_surface_set_fullscreen\n");
 	shell_surface *shsurf = wl_resource_get_user_data(resource);
 	struct weston_output *output;
 
@@ -239,6 +248,7 @@ static void
 xdg_surface_unset_fullscreen(struct wl_client *client,
 			     struct wl_resource *resource)
 {
+	printf("xdg_surface_unset_fullscreen\n");
 	shell_surface *shsurf = wl_resource_get_user_data(resource);
 
 	shsurf->state_requested = true;
@@ -297,6 +307,7 @@ static void
 xdg_surface_set_minimized(struct wl_client *client,
 			    struct wl_resource *resource)
 {
+	printf("xdg_surface_set_minimized\n");
 	shell_surface *shsurf = wl_resource_get_user_data(resource);
 
 	if (shsurf->type != SHELL_SURFACE_TOPLEVEL)

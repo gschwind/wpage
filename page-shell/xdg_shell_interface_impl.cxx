@@ -107,6 +107,7 @@ static void
 xdg_destroy(struct wl_client *client,
 		  struct wl_resource *resource)
 {
+	printf("xdg_destroy\n");
 	wl_resource_destroy(resource);
 }
 
@@ -114,6 +115,7 @@ static void xdg_use_unstable_version(struct wl_client *client,
 			 struct wl_resource *resource,
 			 int32_t version)
 {
+	printf("xdg_use_unstable_version\n");
 	if (version > 1) {
 		wl_resource_post_error(resource, 1,
 				       "xdg-shell:: version not implemented yet.");
@@ -126,6 +128,7 @@ create_xdg_surface(shell_client *owner, void *shell,
 		   struct weston_surface *surface,
 		   const struct weston_shell_client *client)
 {
+	printf("create_xdg_surface\n");
 	shell_surface *shsurf;
 
 	shsurf = new shell_surface(owner, shell, surface, client);
@@ -146,6 +149,7 @@ create_xdg_popup(shell_client *owner, void *shell,
 		 uint32_t serial,
 		 int32_t x, int32_t y)
 {
+	printf("create_xdg_popup\n");
 	shell_surface *shsurf;
 
 	shsurf = new shell_surface(owner, shell, surface, client);
@@ -174,6 +178,7 @@ xdg_get_xdg_surface(struct wl_client *client,
 			/* created by weston (wl_surface implementation of weston) */
 		    struct wl_resource *surface_resource)
 {
+	printf("xdg_get_xdg_surface %p\n", client);
 	auto surface = reinterpret_cast<struct weston_surface *>(wl_resource_get_user_data(surface_resource));
 	auto sc = reinterpret_cast<page::shell_client *>(wl_resource_get_user_data(resource));
 	struct desktop_shell *shell = sc->shell;
@@ -203,11 +208,8 @@ xdg_get_xdg_surface(struct wl_client *client,
 
 	auto n = filter_class<notebook_t>(shell->workspaces.array[0]->tree_t::get_all_children());
 	n[0]->add_client(shsurf, true);
-
 	shell->update_default_layer();
-	/** force size to 100x100 when xdg_surface is created **/
-	//xdg_client.send_configure(surface, 157, 277);
-	//weston_surface_set_size(surface, 100, 100);
+
 
 }
 
@@ -224,6 +226,7 @@ xdg_get_xdg_popup(struct wl_client *client,
 		  uint32_t serial,
 		  int32_t x, int32_t y)
 {
+	printf("xdg_get_xdg_popup\n");
 	struct weston_surface *surface =
 		wl_resource_get_user_data(surface_resource);
 	struct shell_client *sc = wl_resource_get_user_data(resource);
@@ -273,6 +276,7 @@ static void
 xdg_pong(struct wl_client *client,
 	 struct wl_resource *resource, uint32_t serial)
 {
+	printf("xdg_pong\n");
 	page::shell_client *sc = reinterpret_cast<page::shell_client*>(wl_resource_get_user_data(resource));
 
 	sc->shell_client_pong(serial);

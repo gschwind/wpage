@@ -7,6 +7,7 @@
  *
  */
 
+#include "compositor.h"
 #include "desktop_shell.hxx"
 
 #include <cassert>
@@ -728,7 +729,7 @@ desktop_shell::desktop_shell(struct weston_compositor *ec, int *argc, char *argv
 	this->setup_output_destroy_handler(ec);
 
 	loop = wl_display_get_event_loop(ec->wl_display);
-	wl_event_loop_add_idle(loop, launch_desktop_shell_process, this);
+	//wl_event_loop_add_idle(loop, launch_desktop_shell_process, this);
 
 	this->screensaver.timer =
 		wl_event_loop_add_timer(loop, screensaver_timeout, this);
@@ -749,10 +750,10 @@ desktop_shell::desktop_shell(struct weston_compositor *ec, int *argc, char *argv
 
 		uint8_t * data = weston_local_texture_get_data(buffer->local_tex);
 
-		int i;
-		for(i = 0; i < x->width*x->height*4; ++i) {
-			data[i] = random()%256;
-		}
+//		int i;
+//		for(i = 0; i < x->width*x->height*4; ++i) {
+//			data[i] = random()%256;
+//		}
 
 		struct weston_surface *surface = NULL;
 		struct weston_view *view;
@@ -762,10 +763,12 @@ desktop_shell::desktop_shell(struct weston_compositor *ec, int *argc, char *argv
 			throw exception_t("no memory\n");
 		}
 		view = weston_view_create(surface);
-		if (surface == NULL) {
+		if (view == NULL) {
 			weston_surface_destroy(surface);
 			throw exception_t("no memory\n");
 		}
+
+		//surface->keep_buffer = false;
 
 		weston_surface_set_size(surface, x->width, x->height);
 		weston_view_set_position(view, x->x, x->y);
@@ -814,6 +817,7 @@ void desktop_shell::wake_handler()
  **/
 void desktop_shell::bind_shell(wl_client *client, desktop_shell * shell, uint32_t version, uint32_t id)
 {
+	printf("desktop_shell::bind_shell %p\n", client);
 	/**
 	 * reate a new object, this object will be handled by wl_resource
 	 * And it will be destroyed on destroy of this resources
@@ -823,9 +827,12 @@ void desktop_shell::bind_shell(wl_client *client, desktop_shell * shell, uint32_
 
 void desktop_shell::bind_xdg_shell(struct wl_client *client, void *data, uint32_t version, uint32_t id)
 {
+	printf("desktop_shell::bind_xdg_shell %p\n", client);
 	auto shell = reinterpret_cast<struct desktop_shell *>(data);
 
 	auto sc = new page::shell_client(client, shell, page::shell_client::API_XDG, id);
+	//wl_resource_set_implementation(sc->resource, &xdg_implementation, sc, NULL);
+	/** set the dispatcher to intercept use unstable impl **/
 	if (sc)
 		wl_resource_set_dispatcher(sc->resource,
 					   xdg_shell_unversioned_dispatch,
@@ -835,6 +842,7 @@ void desktop_shell::bind_xdg_shell(struct wl_client *client, void *data, uint32_
 void desktop_shell::bind_desktop_shell(struct wl_client *client,
 		   void *data, uint32_t version, uint32_t id)
 {
+	printf("desktop_shell::bind_desktop_shell\n");
 	auto shell = reinterpret_cast<struct desktop_shell *>(data);
 	struct wl_resource *resource;
 
@@ -860,6 +868,7 @@ void desktop_shell::bind_desktop_shell(struct wl_client *client,
 void desktop_shell::bind_screensaver(struct wl_client *client,
 		 void *data, uint32_t version, uint32_t id)
 {
+	printf("desktop_shell::bind_screensaver\n");
 	struct desktop_shell *shell = data;
 	struct wl_resource *resource;
 
@@ -877,10 +886,10 @@ void desktop_shell::bind_screensaver(struct wl_client *client,
 			       "interface object already bound");
 }
 
-void
-desktop_shell::bind_workspace_manager(struct wl_client *client,
+void desktop_shell::bind_workspace_manager(struct wl_client *client,
 		       void *data, uint32_t version, uint32_t id)
 {
+	printf("desktop_shell::bind_workspace_manager\n");
 	desktop_shell *shell = data;
 	struct wl_resource *resource;
 
@@ -1819,9 +1828,8 @@ void desktop_shell::reverse_workspace_change_animation(unsigned int index, page:
 void desktop_shell::update_default_layer()
 {
 	/** remove all **/
-	struct weston_layer_entry * v;
-	wl_list_for_each(v, &default_layer.view_list.link, link)
-		wl_list_remove(&v->link);
+	while(not wl_list_empty(&default_layer.view_list.link))
+		wl_list_remove(default_layer.view_list.link.next);
 
 	for(auto x: filter_class<shell_surface>(workspaces.array[0]->tree_t::get_all_children())) {
 		weston_layer_entry_insert(&default_layer.view_list, &x->view->layer_link);

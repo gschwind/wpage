@@ -1090,16 +1090,6 @@ gl_renderer_flush_damage(struct weston_surface *surface)
 	pixman_region32_union(&gs->texture_damage,
 			      &gs->texture_damage, &surface->damage);
 
-	if(buffer->resource == NULL && pixman_region32_not_empty(&gs->texture_damage)) {
-		printf("bind pith = %d, heigth = %d\n", gs->pitch, buffer->height);
-		glBindTexture(GL_TEXTURE_2D, gs->textures[0]);
-		glTexImage2D(GL_TEXTURE_2D, 0, gs->gl_format,
-			     gs->pitch, buffer->height, 0,
-			     gs->gl_format, gs->gl_pixel_type,
-			     weston_local_texture_get_data(buffer->local_tex));
-		goto done;
-	}
-
 	if (!buffer)
 		return;
 
@@ -1123,6 +1113,20 @@ gl_renderer_flush_damage(struct weston_surface *surface)
 		goto done;
 
 	glBindTexture(GL_TEXTURE_2D, gs->textures[0]);
+
+	if(buffer->resource == NULL && pixman_region32_not_empty(&gs->texture_damage)) {
+		printf("bind pith = %d, heigth = %d\n", gs->pitch, buffer->height);
+		printf("bind local_tex = %p, width = %d, height = %d\n", buffer->local_tex, buffer->local_tex->width, buffer->local_tex->height);
+
+		printf("glTexImage2D(%d,%d,%d,%d,%d,%d,%d,%p)\n",
+				GL_TEXTURE_2D, 0, gs->gl_format,gs->pitch, buffer->height, 0,gs->gl_format, gs->gl_pixel_type,weston_local_texture_get_data(buffer->local_tex));
+
+		glTexImage2D(GL_TEXTURE_2D, 0, gs->gl_format,
+			     gs->pitch, buffer->height, 0,
+			     gs->gl_format, gs->gl_pixel_type,
+			     weston_local_texture_get_data(buffer->local_tex));
+		goto done;
+	}
 
 	if (!gr->has_unpack_subimage) {
 		wl_shm_buffer_begin_access(buffer->shm_buffer);
@@ -1338,12 +1342,16 @@ gl_renderer_attach_local(struct weston_surface *es, struct weston_buffer *buffer
 	struct weston_compositor *ec = es->compositor;
 	struct gl_renderer *gr = get_renderer(ec);
 	struct gl_surface_state *gs = get_surface_state(es);
-	struct wl_shm_buffer *shm_buffer;
 	EGLint format;
 	int i;
 
 	GLenum gl_format, gl_pixel_type;
 	int pitch;
+
+	buffer->resource = NULL;
+	buffer->local_tex = tex;
+	buffer->width = tex->width;
+	buffer->height = tex->height;
 
 	switch (tex->format) {
 	case WL_SHM_FORMAT_XRGB8888:

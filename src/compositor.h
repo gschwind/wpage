@@ -1510,7 +1510,7 @@ weston_transform_to_string(uint32_t output_transform);
 /**
  * Implement the wl_surface interface for local surfaces
  **/
-void local_surface_attach(struct weston_surface * surface, struct weston_local_buffer * buffer, int32_t sx, int32_t sy);
+void local_surface_attach(struct weston_surface * surface, struct weston_buffer * buffer, int32_t sx, int32_t sy);
 void local_surface_damage(struct weston_surface * surface, int32_t x, int32_t y, int32_t width, int32_t height);
 void local_surface_set_opaque_region(struct weston_surface * surface, struct weston_region * region);
 void local_surface_set_input_region(struct weston_surface * surface, struct weston_region * region);

@@ -4828,7 +4828,7 @@ weston_transform_to_string(uint32_t output_transform)
 }
 
 WL_EXPORT void
-local_surface_attach(struct weston_surface * surface, struct weston_local_buffer * buffer, int32_t sx, int32_t sy)
+local_surface_attach(struct weston_surface * surface, struct weston_buffer * buffer, int32_t sx, int32_t sy)
 {
 	/* Attach, attach, without commit in between does not send
 	 * wl_buffer.release. */

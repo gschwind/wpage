@@ -66,6 +66,8 @@ weston_SOURCES =					\
 	src/bindings.c					\
 	src/animation.c					\
 	src/noop-renderer.c				\
+	src/weston-local-texture.c			\
+	src/weston-local-texture.h			\
 	src/pixman-renderer.c				\
 	src/pixman-renderer.h				\
 	src/timeline.c					\

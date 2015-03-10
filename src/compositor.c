@@ -1708,6 +1708,35 @@ weston_buffer_from_resource(struct wl_resource *resource)
 	return buffer;
 }
 
+WL_EXPORT struct weston_buffer *
+weston_buffer_create_local_texture(uint32_t format, int width, int height)
+{
+	struct weston_buffer *buffer;
+	struct wl_listener *listener;
+
+	buffer = zalloc(sizeof *buffer);
+	if (buffer == NULL)
+		return NULL;
+
+	buffer->resource = NULL;
+	wl_signal_init(&buffer->destroy_signal);
+	buffer->y_inverted = 1;
+
+	struct weston_local_buffer * tex;
+	tex = weston_local_buffer_create(format, width, height);
+	if(!tex) {
+		free(buffer);
+		return NULL;
+	}
+
+	buffer->local_tex = tex;
+	buffer->width = tex->width;
+	buffer->height = tex->height;
+
+	return buffer;
+}
+
+
 static void
 weston_buffer_reference_handle_destroy(struct wl_listener *listener,
 				       void *data)
@@ -1727,11 +1756,19 @@ weston_buffer_reference(struct weston_buffer_reference *ref,
 	if (ref->buffer && buffer != ref->buffer) {
 		ref->buffer->busy_count--;
 		if (ref->buffer->busy_count == 0) {
-			assert(wl_resource_get_client(ref->buffer->resource));
-			wl_resource_queue_event(ref->buffer->resource,
-						WL_BUFFER_RELEASE);
+			if(ref->buffer->resource) {
+				assert(wl_resource_get_client(ref->buffer->resource));
+				wl_resource_queue_event(ref->buffer->resource,
+							WL_BUFFER_RELEASE);
+			} else {
+				/** destroy current local texture as needed **/
+				free(ref->buffer->local_tex);
+				free(ref->buffer);
+			}
 		}
-		wl_list_remove(&ref->destroy_listener.link);
+		if(ref->buffer->resource) {
+			wl_list_remove(&ref->destroy_listener.link);
+		}
 	}
 
 	if (buffer && buffer != ref->buffer) {
@@ -1744,7 +1781,7 @@ weston_buffer_reference(struct weston_buffer_reference *ref,
 	ref->destroy_listener.notify = weston_buffer_reference_handle_destroy;
 }
 
-static void
+WL_EXPORT void
 weston_surface_attach(struct weston_surface *surface,
 		      struct weston_buffer *buffer)
 {
@@ -1784,6 +1821,10 @@ weston_output_damage(struct weston_output *output)
 static void
 surface_flush_damage(struct weston_surface *surface)
 {
+	if (surface->buffer_ref.buffer &&
+			surface->buffer_ref.buffer->resource == NULL)
+		surface->compositor->renderer->flush_damage(surface);
+
 	if (surface->buffer_ref.buffer &&
 	    wl_shm_buffer_get(surface->buffer_ref.buffer->resource))
 		surface->compositor->renderer->flush_damage(surface);
@@ -4784,6 +4825,70 @@ weston_transform_to_string(uint32_t output_transform)
 			return transforms[i].name;
 
 	return "<illegal value>";
+}
+
+WL_EXPORT void
+local_surface_attach(struct weston_surface * surface, struct weston_local_buffer * buffer, int32_t sx, int32_t sy)
+{
+	/* Attach, attach, without commit in between does not send
+	 * wl_buffer.release. */
+	weston_surface_state_set_buffer(&surface->pending, buffer);
+
+	surface->pending.sx = sx;
+	surface->pending.sy = sy;
+	surface->pending.newly_attached = 1;
+}
+
+WL_EXPORT void
+local_surface_damage(struct weston_surface * surface,
+		int32_t x, int32_t y, int32_t width, int32_t height)
+{
+	pixman_region32_union_rect(&surface->pending.damage,
+				   &surface->pending.damage,
+				   x, y, width, height);
+}
+
+WL_EXPORT void
+local_surface_set_opaque_region(struct weston_surface * surface,
+			  struct weston_region * region)
+{
+	if (region) {
+		pixman_region32_copy(&surface->pending.opaque,
+				     &region->region);
+	} else {
+		pixman_region32_clear(&surface->pending.opaque);
+	}
+}
+
+WL_EXPORT void
+local_surface_set_input_region(struct weston_surface * surface,
+		  struct weston_region * region)
+{
+	if (region) {
+		pixman_region32_copy(&surface->pending.input,
+				     &region->region);
+	} else {
+		pixman_region32_fini(&surface->pending.input);
+		region_init_infinite(&surface->pending.input);
+	}
+}
+
+WL_EXPORT void
+local_surface_commit(struct weston_surface * surface)
+{
+	struct weston_subsurface *sub = weston_surface_to_subsurface(surface);
+
+	if (sub) {
+		weston_subsurface_commit(sub);
+		return;
+	}
+
+	weston_surface_commit(surface);
+
+	wl_list_for_each(sub, &surface->subsurface_list, parent_link) {
+		if (sub->surface != surface)
+			weston_subsurface_parent_commit(sub, 0);
+	}
 }
 
 

@@ -41,6 +41,7 @@ extern "C" {
 #include "config-parser.h"
 #include "zalloc.h"
 #include "timeline-object.h"
+#include "weston-local-texture.h"
 
 #ifndef MIN
 #define MIN(x,y) (((x) < (y)) ? (x) : (y))
@@ -679,6 +680,7 @@ struct weston_buffer {
 	union {
 		struct wl_shm_buffer *shm_buffer;
 		void *legacy_buffer;
+		struct weston_local_buffer * local_tex;
 	};
 	int32_t width, height;
 	uint32_t busy_count;
@@ -1265,6 +1267,9 @@ weston_surface_set_label_func(struct weston_surface *surface,
 struct weston_buffer *
 weston_buffer_from_resource(struct wl_resource *resource);
 
+struct weston_buffer *
+weston_buffer_create_local_texture(uint32_t format, int width, int height);
+
 void
 weston_buffer_reference(struct weston_buffer_reference *ref,
 			struct weston_buffer *buffer);
@@ -1449,6 +1454,10 @@ weston_surface_set_color(struct weston_surface *surface,
 			 float red, float green, float blue, float alpha);
 
 void
+weston_surface_attach(struct weston_surface *surface,
+		      struct weston_buffer *buffer);
+
+void
 weston_surface_destroy(struct weston_surface *surface);
 
 int
@@ -1497,6 +1506,15 @@ weston_parse_transform(const char *transform, uint32_t *out);
 
 const char *
 weston_transform_to_string(uint32_t output_transform);
+
+/**
+ * Implement the wl_surface interface for local surfaces
+ **/
+void local_surface_attach(struct weston_surface * surface, struct weston_local_buffer * buffer, int32_t sx, int32_t sy);
+void local_surface_damage(struct weston_surface * surface, int32_t x, int32_t y, int32_t width, int32_t height);
+void local_surface_set_opaque_region(struct weston_surface * surface, struct weston_region * region);
+void local_surface_set_input_region(struct weston_surface * surface, struct weston_region * region);
+void local_surface_commit(struct weston_surface * surface);
 
 #ifdef  __cplusplus
 }

@@ -1509,8 +1509,15 @@ weston_surface_set_color(struct weston_surface *surface,
 			 float red, float green, float blue, float alpha);
 
 void
+weston_surface_state_set_buffer(struct weston_surface_state *state,
+				struct weston_buffer *buffer);
+
+void
 weston_surface_attach(struct weston_surface *surface,
 		      struct weston_buffer *buffer);
+
+void
+weston_surface_commit(struct weston_surface *surface);
 
 void
 weston_surface_destroy(struct weston_surface *surface);

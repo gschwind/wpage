@@ -297,8 +297,8 @@ void viewport_t::expose(region const & r) {
 
 void viewport_t::render_background() {
 
-//	struct weston_buffer * buffer = weston_buffer_create_local_texture(WL_SHM_FORMAT_ARGB8888, _raw_aera.w, _raw_aera.h);
-//	weston_buffer_reference(&background_buffer, buffer);
+	//struct weston_buffer * buffer = weston_buffer_create_local_texture(WL_SHM_FORMAT_ARGB8888, _raw_aera.w, _raw_aera.h);
+	//weston_buffer_reference(&background_buffer, buffer);
 
 	cairo_surface_t * surf = get_cairo_surface_for_weston_buffer(
 			background_buffer.buffer);
@@ -329,14 +329,32 @@ void viewport_t::render_background() {
 //
 	struct weston_view * view = container_of(_wsurf->views.next, weston_view, surface_link);
 	printf("x = %f, y = %f\n", view->geometry.x, view->geometry.y);
+
+	// this remove the view of the surface
+	//wl_list_remove(&view->layer_link.link);
 //
 //	weston_view_set_position(view, 100, 100);
 //	weston_layer_entry_insert(&background_real_layer.view_list, &view->layer_link);
 
+	cairo_surface_flush(surf);
 	cairo_destroy(cr);
 	cairo_surface_destroy(surf);
-	weston_surface_attach(_wsurf, background_buffer.buffer);
+
+	/** do the same process of submiting new buffer **/
+
+	/* Attach, attach, without commit in between does not send
+	 * wl_buffer.release. */
+	weston_surface_state_set_buffer(&_wsurf->pending, background_buffer.buffer);
+
+	_wsurf->pending.sx = 0;
+	_wsurf->pending.sy = 0;
+	_wsurf->pending.newly_attached = 1;
+//
+//	weston_view_set_position(view, 0, 0);
+
+	//weston_surface_attach(_wsurf, background_buffer.buffer);
 	weston_surface_damage(_wsurf);
+	weston_surface_commit(_wsurf);
 
 }
 

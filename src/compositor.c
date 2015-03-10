@@ -595,7 +595,7 @@ weston_surface_state_fini(struct weston_surface_state *state)
 	state->buffer = NULL;
 }
 
-static void
+WL_EXPORT void
 weston_surface_state_set_buffer(struct weston_surface_state *state,
 				struct weston_buffer *buffer)
 {
@@ -1942,7 +1942,8 @@ weston_buffer_reference(struct weston_buffer_reference *ref,
 				/** destroy current local texture as needed **/
 				printf("freee\n");
 				free(ref->buffer->local_tex);
-				free(ref->buffer);
+				/** TODO **/
+				//free(ref->buffer);
 			}
 		}
 		if(ref->buffer->resource) {
@@ -2673,7 +2674,7 @@ weston_surface_commit_state(struct weston_surface *surface,
 	wl_list_init(&state->feedback_list);
 }
 
-static void
+WL_EXPORT void
 weston_surface_commit(struct weston_surface *surface)
 {
 	weston_surface_commit_state(surface, &surface->pending);

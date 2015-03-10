@@ -1336,12 +1336,16 @@ gl_renderer_attach_local(struct weston_surface *es, struct weston_buffer *buffer
 	struct weston_compositor *ec = es->compositor;
 	struct gl_renderer *gr = get_renderer(ec);
 	struct gl_surface_state *gs = get_surface_state(es);
-	struct wl_shm_buffer *shm_buffer;
 	EGLint format;
 	int i;
 
 	GLenum gl_format, gl_pixel_type;
 	int pitch;
+
+	buffer->resource = NULL;
+	buffer->local_tex = tex;
+	buffer->width = tex->width;
+	buffer->height = tex->height;
 
 	switch (tex->format) {
 	case WL_SHM_FORMAT_XRGB8888:

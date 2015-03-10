@@ -17,6 +17,8 @@
 #include "surface.hxx"
 #include "exception.hxx"
 #include "grab_handlers.hxx"
+#include "workspace.hxx"
+#include "notebook.hxx"
 
 
 
@@ -35,13 +37,13 @@ const struct weston_shell_client shell_client::shell_client_impl = {
  * In particular wl_shell or xdg_shell protocol.
  */
 shell_client::shell_client(wl_client *client, desktop_shell *shell, api type, uint32_t id) :
-resource{nullptr},
-client{client},
-shell{shell},
-ping_timer{nullptr},
-ping_serial{0},
-unresponsive{0},
-destroy_listener{this, &shell_client::handle_shell_client_destroy}
+	resource{nullptr},
+	client{client},
+	shell{shell},
+	ping_timer{nullptr},
+	ping_serial{0},
+	unresponsive{0},
+	destroy_listener{this, &shell_client::handle_shell_client_destroy}
 {
 
 	if(type == API_SHELL) {
@@ -97,6 +99,7 @@ void shell_client::shell_get_shell_surface(
 		uint32_t id,
 		wl_resource *surface_resource)
 {
+	printf("new shell surface for %p\n", client);
 	auto surface = reinterpret_cast<weston_surface*>(wl_resource_get_user_data(surface_resource));
 	auto sc = reinterpret_cast<shell_client*>(wl_resource_get_user_data(resource));
 	auto shell = sc->shell;
@@ -122,6 +125,11 @@ void shell_client::shell_get_shell_surface(
 	wl_resource_set_implementation(shsurf->resource,
 				       &page::shell_surface_implementation,
 				       shsurf, shell_surface::shell_destroy_shell_surface);
+
+
+	auto n = filter_class<notebook_t>(shell->workspaces.array[0]->tree_t::get_all_children());
+	n[0]->add_client(shsurf, true);
+	shell->update_default_layer();
 
 }
 
